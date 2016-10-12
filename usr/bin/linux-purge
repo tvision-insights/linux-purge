@@ -138,8 +138,8 @@ Exit Status:
 	2:  No superuser privileges even if required.
 	other integer:  Purging failed for some other reason.
 
-Report bugs to: <8+${program_name}@iki.fi>
-pkg home page: <>
+Report bugs at: <https://bugs.launchpad.net/linux-purge/+filebug>
+Launchpad home page: <https://launchpad.net/linux-purge>
 General help using GNU software: <http://www.gnu.org/gethelp/>\n" |
 sed 's/\t/    /g'
 }
