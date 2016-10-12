@@ -61,11 +61,11 @@ note() {
 }
 
 restore_update_grub() {
-	[[ $update_grub_disabled ]] && {
+	if [[ $update_grub_disabled ]]; then
 		chmod +x "$update_grub"
 		note "Made '$update_grub' executable again."
 		update_grub_disabled=
-	}
+	fi
 }
 
 # NOTE: in case of power cut this will not be done and update-grub may
@@ -271,6 +271,7 @@ $([[ $legend ]] && printf %s "$legend_text")"
 }
 
 getVersionToPurge() {
+	local exit_code=
 	local readonly height=$(($(tput lines)-5))
 	local readonly title='Choose Which Linux Kernel to Purge'
 	local readonly infotext='The program purges the chosen kernel in
@@ -648,9 +649,10 @@ if [[ $PkgsToPurge ]]; then
 	  update_grub_disabled=1
 	}
 	apt-get $simulate $yes purge $PkgsToPurge || {
-			[[ $update_grub_disabled ]] && run_update_grub || true
-		error "Purging by apt-get failed; apt-get error $?.
+		err_code=$?
+		[[ $update_grub_disabled ]] && run_update_grub || true
+			error "Purging by apt-get failed; apt-get error $err_code.
 Hint: try running the script with --fix option." 3
 	}
-	[[ $update_grub_disabled ]] && run_update_grub
+	[[ $update_grub_disabled ]] && run_update_grub || true
 fi
