@@ -229,7 +229,6 @@ $rdirs.*$regex" ||
 				[[ $update_grub ]] && $update_grub
 			}
 	}
-	: # needed for some obscure reason
 }
 
 # Get kernels to purge interactively
@@ -643,9 +642,9 @@ if [[ $PkgsToPurge ]]; then
 	}
 	apt-get $simulate $yes purge $PkgsToPurge || {
 		err_code=$?
-		[[ $update_grub_disabled ]] && run_update_grub || true
-			error "Purging by apt-get failed; apt-get error $err_code.
+		[[ $update_grub_disabled ]] && run_update_grub
+		error "Purging by apt-get failed; apt-get error $err_code.
 Hint: try running the script with --fix option." 3
 	}
-	[[ $update_grub_disabled ]] && run_update_grub || true
+	[[ $update_grub_disabled ]] && run_update_grub
 fi
