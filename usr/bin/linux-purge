@@ -425,7 +425,6 @@ executed in simulation mode, because it would be identical to the first run.'
 	[[ $simulate ]] || note "Fixing finished successfully.
 HINT: Yoo may run the script again without --fix option to possibly purge more \
 versioned kernel packages."
-	exit
 }
 
 # Main program
