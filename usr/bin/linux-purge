@@ -24,7 +24,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-set -u -e
+set -u +e
 export LC_ALL=C # Use C locale to get standard sorting and better regex
 # performance.
 
@@ -249,16 +249,13 @@ Free space on /boot: $(avail_boot) MB$([[ $boot != '/boot' ]] &&
 $([[ $legend ]] && printf %s "$legend_text")"
 	readonly local infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
-		set +e
 		dialog --title "$title" --stdout --separate-output \
 		--backtitle "$program_full_name" --cr-wrap \
 		--checklist "$infotext" $height 60 $((height-infolines-6)) $1
 		exit_code=$?
 		clear >/dev/tty
 		[[ $exit_code != ${DIALOG_OK-0} ]] && exit 1
-		set -e
 	else
-		set +e
 		whiptail --title "$title" --separate-output \
 		--backtitle "$program_full_name" \
 		--checklist "$infotext" $height 60 $((height-infolines-6)) \
@@ -266,7 +263,6 @@ $([[ $legend ]] && printf %s "$legend_text")"
 		exit_code=$?
 		clear >/dev/tty
 		[[ $exit_code != 0 ]] && exit 1
-		set -e
 	fi
 }
 
@@ -278,23 +274,19 @@ getVersionToPurge() {
 a special way due to lack of free inodes.'
 	readonly local infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
-		set +e
 		dialog --title "$title" --backtitle "$program_full_name" \
 		--cr-wrap --no-items --stdout --menu "$infotext" $height 60 \
 		 $((height-infolines-7)) $1
 		exit_code=$?
 		clear >/dev/tty
 		[[ $exit_code != ${DIALOG_OK-0} ]] && exit 1
-		set -e
 	else
-		set +e
 		whiptail --title "$title" --backtitle "$program_full_name" \
 		--noitem --menu "$infotext" $height 60 $((height-infolines-7)) \
 		 $(for i in $1; do printf '%s 1 ' "$i"; done) 2>&1 >/dev/tty
 		exit_code=$?
 		clear >/dev/tty
 		[[ $exit_code != 0 ]] && exit 1
-		set -e
 	fi
 }
 
@@ -437,11 +429,9 @@ versioned kernel packages."
 # Main program
 
 # Handle command line options
-set +e
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null
 [[ $? != 4 ]] && error '`getopt --test` failed in this environment.' 127
 # This should not happen with util-linux's getopt.
-set -e
 params=$(env -u GETOPT_COMPATIBLE getopt -o abcfhk:mnsvy -l auto-only,\
 clear-boot,choose,fix,help,keep:,manual,no-legend,simulate,version,yes --name \
 "$program_name" -- "$@")
