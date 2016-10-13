@@ -132,11 +132,10 @@ Options:
 	-y, --yes       Purge without user confirmation.
 
 Exit Status:
-	0:  Finished successfully
-	1:  Command line is invalid, or user did not press OK in checklist
-		control.
-	2:  No superuser privileges even if required.
-	other integer:  Purging failed for some other reason.
+	0:  Command finished successfully.
+	1:  Command-line is invalid.
+	2:  Command was run with wrong privileges.
+	other integer:  Command failed for some other reason.
 
 Report bugs at: <https://bugs.launchpad.net/linux-purge/+filebug>
 Launchpad home page: <https://launchpad.net/linux-purge>
@@ -229,6 +228,7 @@ $rdirs.*$regex" ||
 				[[ $update_grub ]] && $update_grub
 			}
 	}
+	exit 0
 }
 
 # Get kernels to purge interactively
@@ -255,7 +255,7 @@ $([[ $legend ]] && printf %s "$legend_text")"
 		--checklist "$infotext" $height 60 $((height-infolines-6)) $1
 		exit_code=$?
 		clear >/dev/tty
-		[[ $exit_code != ${DIALOG_OK-0} ]] && exit 1
+		[[ $exit_code != ${DIALOG_OK-0} ]] && exit 3
 	else
 		whiptail --title "$title" --separate-output \
 		--backtitle "$program_full_name" \
@@ -263,8 +263,9 @@ $([[ $legend ]] && printf %s "$legend_text")"
 		 $1 2>&1 >/dev/tty
 		exit_code=$?
 		clear >/dev/tty
-		[[ $exit_code != 0 ]] && exit 1
+		[[ $exit_code != 0 ]] && exit 3
 	fi
+	exit 0
 }
 
 getVersionToPurge() {
@@ -280,15 +281,16 @@ a special way due to lack of free inodes.'
 		 $((height-infolines-7)) $1
 		exit_code=$?
 		clear >/dev/tty
-		[[ $exit_code != ${DIALOG_OK-0} ]] && exit 1
+		[[ $exit_code != ${DIALOG_OK-0} ]] && exit 3
 	else
 		whiptail --title "$title" --backtitle "$program_full_name" \
 		--noitem --menu "$infotext" $height 60 $((height-infolines-7)) \
 		 $(for i in $1; do printf '%s 1 ' "$i"; done) 2>&1 >/dev/tty
 		exit_code=$?
 		clear >/dev/tty
-		[[ $exit_code != 0 ]] && exit 1
+		[[ $exit_code != 0 ]] && exit 3
 	fi
+	exit 0
 }
 
 run_fix() {
@@ -322,8 +324,10 @@ run_fix() {
 		okVersions=${okVersions%% }
 		[[ $okVersions ]] || error "No suitable version to purge." 3
 		[[ $(printf %s "$okVersions" | wc -w) == 1 ]] &&
-		 version=$okVersions ||
-		 version=$(getVersionToPurge "$okVersions")
+		 version=$okVersions || {
+			version=$(getVersionToPurge "$okVersions")
+			[[ $? != 0 ]] && exit 3
+		}
 		[[ $version ]] || error "No suitable version to purge." 3
 		note "Removing header files under /usr/src; please wait .."
 		rm -rf --one-file-system /usr/src/linux-headers-"$version"/ \
@@ -333,8 +337,7 @@ run_fix() {
 		$(dpkg-query -W -f='${Status} ${Package}\n' |
 		 awk '/^[^ ]+ ok installed linux-.+-'"$(escape_regex "${version}")"\
 '(-.*)?$/{print $4}') || {
-			err_code=$?
-			error "Purging by dpkg failed; dpkg error $err_code." 3
+			error "Purging by dpkg failed; dpkg error $?." 3
 			# NOTE: some packages may have selection state
 			# "purge" after this.
 		}
@@ -391,15 +394,14 @@ space on /boot, purging some kernels will help."
 				--printf='+%s' /boot/*-$release{,.efi.signed} \
 				2>/dev/null))/$MB)) off
 			 done)")
+			[[ $? != 0 ]] && exit 3
 		}
 		for release in $ReleasesToPurge; do
 			dpkg --purge --abort-after=50 $simulate \
 				$(dpkg-query -W -f='${Package}\n' |
-				awk '/^linux-.+-'"$(escape_regex "$release")"'$/') || {
-					err_code=$?
-					error "Purging by dpkg failed; dpkg error $err_code." 3
+				awk '/^linux-.+-'"$(escape_regex "$release")"'$/') ||
+					error "Purging by dpkg failed; dpkg error $?." 3
 					# NOTE: some packages may have selection state "purge".
-				}
 			[[ $simulate ]] ||
 			 dpkg --purge $simulate \
 			  $(dpkg-query -W -f='${Package}\n' |
@@ -424,13 +426,14 @@ executed in simulation mode, because it would be identical to the first run.'
 	[[ $simulate ]] || note "Fixing finished successfully.
 HINT: Yoo may run the script again without --fix option to possibly purge more \
 versioned kernel packages."
+	exit 0
 }
 
 # Main program
 
 # Handle command line options
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null
-[[ $? != 4 ]] && error '`getopt --test` failed in this environment.' 127
+[[ $? != 4 ]] && error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
 params=$(env -u GETOPT_COMPATIBLE getopt -o abcfhk:mnosvy -l auto-only,\
 clear-boot,choose,fix,help,keep:,manual,no-legend,optimize,simulate,version,yes --name \
@@ -613,6 +616,7 @@ if [[ $choose ]]; then
 		ReleasesToPurge=
 	else
 		ReleasesToPurge=$(getReleasesToPurge "$Items")
+		[[ $? != 0 ]] && exit 3
 	fi
 	if [[ $ReleasesToPurge ]]; then
 		ReleasesToKeep=$(get_set_complement "$Releases" "$ReleasesToPurge")
