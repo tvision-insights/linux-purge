@@ -498,7 +498,7 @@ fi
 # $n is valid number, if needed
 
 [[ $auto_only && ! $keep ]] || [[ $keep && $manual ]] ||
- [[ $fix && ($keep || $manual || $choose || $yes) ]] &&
+ [[ $fix && ($keep || $manual || $choose || $yes || $optimize) ]] &&
   error "Invalid combination of options. Hint:
   $program_name -h" 1
 
