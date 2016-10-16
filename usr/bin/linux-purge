@@ -496,9 +496,7 @@ fi
   error "Invalid combination of options. Hint:
   $program_name -h" 1
 
-if [ $# -ne 0 ]; then
-	error "No argument \"$1\" allowed." 1
-fi
+[[ $# -eq 0 ]] || error "No argument \"$1\" allowed." 1
 
 # Ensure superuser privileges, if required
 [[ -z $simulate && $EUID -ne 0 ]] &&
