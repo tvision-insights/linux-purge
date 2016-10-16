@@ -228,7 +228,7 @@ $rdirs.*$regex" ||
 				[[ $update_grub ]] && $update_grub
 			}
 	}
-	exit 0
+	:
 }
 
 # Get kernels to purge interactively
@@ -255,7 +255,7 @@ $([[ $legend ]] && printf %s "$legend_text")"
 		--checklist "$infotext" $height 60 $((height-infolines-6)) $1
 		exit_code=$?
 		clear >/dev/tty
-		[[ $exit_code != ${DIALOG_OK-0} ]] && exit 3
+		[[ $exit_code -eq ${DIALOG_OK-0} ]] || exit 3
 	else
 		whiptail --title "$title" --separate-output \
 		--backtitle "$program_full_name" \
@@ -263,9 +263,8 @@ $([[ $legend ]] && printf %s "$legend_text")"
 		 $1 2>&1 >/dev/tty
 		exit_code=$?
 		clear >/dev/tty
-		[[ $exit_code != 0 ]] && exit 3
+		[[ $exit_code -eq 0 ]] || exit 3
 	fi
-	exit 0
 }
 
 getVersionToPurge() {
@@ -281,16 +280,15 @@ a special way due to lack of free inodes.'
 		 $((height-infolines-7)) $1
 		exit_code=$?
 		clear >/dev/tty
-		[[ $exit_code != ${DIALOG_OK-0} ]] && exit 3
+		[[ $exit_code -eq ${DIALOG_OK-0} ]] || exit 3
 	else
 		whiptail --title "$title" --backtitle "$program_full_name" \
 		--noitem --menu "$infotext" $height 60 $((height-infolines-7)) \
 		 $(for i in $1; do printf '%s 1 ' "$i"; done) 2>&1 >/dev/tty
 		exit_code=$?
 		clear >/dev/tty
-		[[ $exit_code != 0 ]] && exit 3
+		[[ $exit_code -eq 0 ]] || exit 3
 	fi
-	exit 0
 }
 
 run_fix() {
@@ -323,11 +321,8 @@ run_fix() {
 		done
 		okVersions=${okVersions%% }
 		[[ $okVersions ]] || error "No suitable version to purge." 3
-		[[ $(printf %s "$okVersions" | wc -w) == 1 ]] &&
-		 version=$okVersions || {
-			version=$(getVersionToPurge "$okVersions")
-			[[ $? != 0 ]] && exit 3
-		}
+		[[ $(printf %s "$okVersions" | wc -w) == 1 ]] && version=$okVersions ||
+		 version=$(getVersionToPurge "$okVersions") || exit 3
 		[[ $version ]] || error "No suitable version to purge." 3
 		note "Removing header files under /usr/src; please wait .."
 		rm -rf --one-file-system /usr/src/linux-headers-"$version"/ \
@@ -393,8 +388,7 @@ space on /boot, purging some kernels will help."
 				printf '%s (%s%s) %s ' "$release" "$mark" $(((0$(stat \
 				--printf='+%s' /boot/*-$release{,.efi.signed} \
 				2>/dev/null))/$MB)) off
-			 done)")
-			[[ $? != 0 ]] && exit 3
+			 done)") || exit 3
 		}
 		for release in $ReleasesToPurge; do
 			dpkg --purge --abort-after=50 $simulate \
@@ -426,14 +420,14 @@ executed in simulation mode, because it would be identical to the first run.'
 	[[ $simulate ]] || note "Fixing finished successfully.
 HINT: Yoo may run the command again without --fix option to possibly purge \
 more versioned kernel packages."
-	exit 0
+	:
 }
 
 # Main program
 
 # Handle command line options
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null
-[[ $? != 4 ]] && error '`getopt --test` failed in this environment.' 3
+[[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
 params=$(env -u GETOPT_COMPATIBLE getopt -o abcfhk:mnosvy -l auto-only,\
 clear-boot,choose,fix,help,keep:,manual,no-legend,optimize,simulate,version,yes --name \
@@ -615,8 +609,7 @@ if [[ $choose ]]; then
 		note "No kernels to choose from. Just clear the junk..."
 		ReleasesToPurge=
 	else
-		ReleasesToPurge=$(getReleasesToPurge "$Items")
-		[[ $? != 0 ]] && exit 3
+		ReleasesToPurge=$(getReleasesToPurge "$Items") || exit 3
 	fi
 	if [[ $ReleasesToPurge ]]; then
 		ReleasesToKeep=$(get_set_complement "$Releases" "$ReleasesToPurge")
@@ -652,3 +645,4 @@ Hint: try running the command with --fix option." 3
 	}
 	[[ $update_grub_disabled ]] && run_update_grub
 fi
+:
