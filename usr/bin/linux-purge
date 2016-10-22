@@ -559,8 +559,8 @@ if [[ -z $keep ]]; then
 		# with "hold".
 		ManualReleases=$(get_manual_releases)
 		HoldReleases=$(get_hold_releases)
-		ReleasesToKeep=$(sort -Vu <(printf '%s\n%s' "$(get_set_complement \
-		"$Releases" "$ManualReleases")" "$HoldReleases"))
+		ReleasesToKeep=$(sort -Vu <(printf '%s\n%s\n%s' "$current" \
+		"$(get_set_complement "$Releases" "$ManualReleases")" "$HoldReleases"))
 	} ||
 	ReleasesToKeep=$Releases
 else
