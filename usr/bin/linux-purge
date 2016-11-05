@@ -124,10 +124,10 @@ Options:
 					manually installed.
 	-n, --no-legend Do not display legend in checklist used by -c and -f.
 	-o, --optimize  Run update-grub only once in normal operation.
-	-s, --simulate  Dry-run; do not actually remove packages. Run this
-					as regular user. Note that in some cases simulation
-					is not complete since some actions may depend on
-					others being done for real beforehand.
+	-s, --simulate  Dry-run; do not actually remove packages. You may
+					run this as regular user. Note that in some cases
+					simulation is not complete since some actions may
+					depend on others being done for real beforehand.
 	-v, --version   Print version.
 	-y, --yes       Purge without user confirmation.
 
@@ -216,14 +216,19 @@ Continue to removing the files and also respective files elsewhere in system? \
 					  regex="-$(escape_regex "$version")(-$(escape_regex \
 					   "$flavour"))?$" ||
 					   regex="-$(escape_regex "$release")$"
-					[[ $yes ]] &&
-					 note "Removing files matching extended regular expression
-$rdirs.*$regex" ||
-					 note "Answer y to remove the files."
-					# You could run updatedb here, but suppose it is run after
+					# You could run updatedb here, but suppose it was run after
 					# the system has been installed already.
-					locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
-					  xargs -0 $([[ $yes ]] || printf %s '-p') rm -rf || true
+					if [[ $simulate ]]; then
+						locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
+						 xargs -0 $([[ $yes ]] || printf %s '-p') \
+						  printf "Would remove %s\n"
+					else
+						[[ $yes ]] && note "Removing files matching extended \
+regular expression
+$rdirs.*$regex" || note "Answer y to remove the files."
+						locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
+						 xargs -0 $([[ $yes ]] || printf %s '-p') rm -rf
+					fi
 				done
 				[[ $update_grub ]] && $update_grub
 			}
@@ -324,9 +329,13 @@ run_fix() {
 		[[ $(printf %s "$okVersions" | wc -w) == 1 ]] && version=$okVersions ||
 		 version=$(getVersionToPurge "$okVersions") || exit 3
 		[[ $version ]] || error "No suitable version to purge." 3
-		note "Removing header files under /usr/src; please wait .."
-		rm -rf --one-file-system /usr/src/linux-headers-"$version"/ \
-		 /usr/src/linux-headers-"$version"-*/ || true
+		local dirs=$(ls -d /usr/src/linux-headers-${version}/ \
+		/usr/src/linux-headers-${version}-*/)
+		local dir;
+		for dir in $dirs; do
+			note "Removing $dir"
+			[[ $simulate ]] || rm -rf "$dir"
+		done
 		note "Purging the kernel by dpkg ..."
 		dpkg --purge --abort-after=50 $simulate \
 		$(dpkg-query -W -f='${Status} ${Package}\n' |
@@ -430,8 +439,8 @@ env -u GETOPT_COMPATIBLE getopt --test >/dev/null
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
 params=$(env -u GETOPT_COMPATIBLE getopt -o abcfhk:mnosvy -l auto-only,\
-clear-boot,choose,fix,help,keep:,manual,no-legend,optimize,simulate,version,yes --name \
-"$program_name" -- "$@")
+clear-boot,choose,fix,help,keep:,manual,no-legend,optimize,simulate,version,\
+yes --name "$program_name" -- "$@")
 eval set -- "$params"
 unset params
 while :; do
@@ -502,11 +511,6 @@ fi
 [[ -z $simulate && $EUID -ne 0 ]] &&
 error "Must be run as root, if not in simulation mode. Hint:
   $program_name -h" 2
-
-# Add this check so that removing does not happen when running
-# simulation with --fix or --clear-boot.
-[[ $simulate && $EUID -eq 0 ]] &&
-error "Run simulation as regular user." 2
 
 # make sure update-grub is executable, if needed
 [[ $simulate ]] || {
