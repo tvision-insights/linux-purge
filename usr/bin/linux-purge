@@ -203,10 +203,11 @@ Continue to removing the files and also respective files elsewhere in system? \
 (Y/n) : " response &&
 			[[ ${response,,} =~ ^(y|$) ]] ;} && {
 				# restrict removing to these directories:
-				local readonly rdirs='^/(boot|lib|usr|var)/'
+				local release version flavour regex
+				local -r rdirs='^/(boot|lib|usr|var)/'
 				for release in $UnknownReleases; do
-					local version=$(printf %s "$release" | cut -d- -f1,2)
-					local flavour=$(printf %s "$release" | cut -d- -f3-)
+					version=$(printf %s "$release" | cut -d- -f1,2)
+					flavour=$(printf %s "$release" | cut -d- -f3-)
 					# check, if also files without the flavour part can be
 					# removed
 					dpkg-query -W -f='${Package}\n' |
@@ -241,19 +242,19 @@ $rdirs.*$regex" || note "Answer y to remove the files."
 # (See manual page of whiptail or dialog for more information.)
 getReleasesToPurge() {
 	local exit_code=
-	local readonly title='Choose Which Kernels to Purge'
-	local readonly height=$(($(tput lines)-5))
-	local readonly legend_text="Legend of Content Inside Parentheses:
+	local -r title='Choose Which Kernels to Purge'
+	local -r height=$(($(tput lines)-5))
+	local -r legend_text="Legend of Content Inside Parentheses:
 * a plus sign (+), if the kernel is needed for updates
 * letter H, if the kernel is marked for hold
 * letter M, if the kernel is manually installed
 * the size of the kernel within /boot in megabytes
 Hint: Space bar toggles item's selection."
-	local readonly infotext="Booted kernel: $current
+	local -r infotext="Booted kernel: $current
 Free space on /boot: $(avail_boot) MB$([[ $boot != '/boot' ]] &&
 	printf ' (mounted at %s)' "$boot")
 $([[ $legend ]] && printf %s "$legend_text")"
-	readonly local infolines=$((1+$(printf %s "$infotext" | wc -l)))
+	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
 		dialog --title "$title" --stdout --separate-output \
 		--backtitle "$program_full_name" --cr-wrap \
@@ -274,11 +275,11 @@ $([[ $legend ]] && printf %s "$legend_text")"
 
 getVersionToPurge() {
 	local exit_code=
-	local readonly height=$(($(tput lines)-5))
-	local readonly title='Choose Which Linux Kernel to Purge'
-	local readonly infotext='The program purges the chosen kernel in
+	local -r height=$(($(tput lines)-5))
+	local -r title='Choose Which Linux Kernel to Purge'
+	local -r infotext='The program purges the chosen kernel in
 a special way due to lack of free inodes.'
-	readonly local infolines=$((1+$(printf %s "$infotext" | wc -l)))
+	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
 		dialog --title "$title" --backtitle "$program_full_name" \
 		--cr-wrap --no-items --stdout --menu "$infotext" $height 60 \
@@ -329,10 +330,8 @@ run_fix() {
 		[[ $(printf %s "$okVersions" | wc -w) == 1 ]] && version=$okVersions ||
 		 version=$(getVersionToPurge "$okVersions") || exit 3
 		[[ $version ]] || error "No suitable version to purge." 3
-		local dirs=$(ls -d /usr/src/linux-headers-${version}/ \
-		/usr/src/linux-headers-${version}-*/)
-		local dir;
-		for dir in $dirs; do
+		for dir in /usr/src/linux-headers-${version}/ \
+		 /usr/src/linux-headers-${version}-*/; do
 			note "Removing $dir"
 			[[ $simulate ]] || rm -rf "$dir"
 		done
@@ -362,12 +361,10 @@ containing partition is mounted at %s." $boot) $([[ $last_release ]] &&
 		 2>/dev/null))/MB))) If the dependency problem is due to insufficient \
 space on /boot, purging some kernels will help."
 
-		LeftoverReleases=$(get_set_complement "$InstalledReleases" \
-		"$(printf '%s\n%s' "$(get_latest_releases)" "$current")")
-
 		# Restrict to releases that have related linux packages "ok".
 		okReleases=
-		for release in $LeftoverReleases; do
+		for release in $(get_set_complement "$InstalledReleases" \
+		"$(printf '%s\n%s' "$(get_latest_releases)" "$current")"); do
 			version=$(printf %s "$release" | cut -d- -f1,2)
 			flavour=$(printf %s "$release" | cut -d- -f3-)
 			[[ $(dpkg-query -W -f='${Status} ${Package}\n' |
