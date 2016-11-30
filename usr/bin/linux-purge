@@ -432,12 +432,20 @@ more versioned kernel packages."
 # Main program
 
 # Handle command line options
+
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
 params=$(env -u GETOPT_COMPATIBLE getopt -o abcfhk:mnosvy -l auto-only,\
 clear-boot,choose,fix,help,keep:,manual,no-legend,optimize,simulate,version,\
-yes --name "$program_name" -- "$@")
+yes --name "[$program_name] ERROR" -- "$@")
+err_code=$?
+case $err_code in
+	0) ;;
+	1) exit 1 ;;
+	*) error "getopt exited with error code $err_code" 3
+esac
+
 eval set -- "$params"
 unset params
 while :; do
