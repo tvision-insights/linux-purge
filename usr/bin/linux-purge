@@ -241,7 +241,6 @@ $rdirs.*$regex" || note "Answer y to remove the files."
 # $1 is list of tag string, item string and status string combinations.
 # (See manual page of whiptail or dialog for more information.)
 getReleasesToPurge() {
-	local exit_code=
 	local -r title='Choose Which Kernels to Purge'
 	local -r height=$(($(tput lines)-5))
 	local -r legend_text="Legend of Content Inside Parentheses:
@@ -256,44 +255,45 @@ Free space on /boot: $(avail_boot) MB$([[ $boot != '/boot' ]] &&
 $([[ $legend ]] && printf %s "$legend_text")"
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
+		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --stdout --separate-output \
 		--backtitle "$program_full_name" --cr-wrap \
 		--checklist "$infotext" $height 60 $((height-infolines-6)) $1
-		exit_code=$?
-		clear >/dev/tty
-		[[ $exit_code -eq ${DIALOG_OK-0} ]] || exit 3
+		case $? in
+			$DIALOG_OK) clear >/dev/tty ;;
+			$DIALOG_ESC|$DIALOG_CANCEL) clear >/dev/tty ;&
+			*) exit 3
+		esac
 	else
 		whiptail --title "$title" --separate-output \
 		--backtitle "$program_full_name" \
 		--checklist "$infotext" $height 60 $((height-infolines-6)) \
 		 $1 2>&1 >/dev/tty
-		exit_code=$?
-		clear >/dev/tty
-		[[ $exit_code -eq 0 ]] || exit 3
+		[[ $? -eq 0 ]] || exit 3
 	fi
 }
 
 getVersionToPurge() {
-	local exit_code=
 	local -r height=$(($(tput lines)-5))
 	local -r title='Choose Which Linux Kernel to Purge'
 	local -r infotext='The program purges the chosen kernel in
 a special way due to lack of free inodes.'
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
+		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --backtitle "$program_full_name" \
 		--cr-wrap --no-items --stdout --menu "$infotext" $height 60 \
 		 $((height-infolines-7)) $1
-		exit_code=$?
-		clear >/dev/tty
-		[[ $exit_code -eq ${DIALOG_OK-0} ]] || exit 3
+		case $? in
+			$DIALOG_OK) clear >/dev/tty ;;
+			$DIALOG_ESC|$DIALOG_CANCEL) clear >/dev/tty ;&
+			*) exit 3
+		esac
 	else
 		whiptail --title "$title" --backtitle "$program_full_name" \
 		--noitem --menu "$infotext" $height 60 $((height-infolines-7)) \
 		 $(for i in $1; do printf '%s 1 ' "$i"; done) 2>&1 >/dev/tty
-		exit_code=$?
-		clear >/dev/tty
-		[[ $exit_code -eq 0 ]] || exit 3
+		[[ $? -eq 0 ]] || exit 3
 	fi
 }
 
