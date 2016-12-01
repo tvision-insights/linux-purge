@@ -274,12 +274,7 @@ $([[ $legend ]] && printf %s "$legend_text")"
 		whiptail --title "$title" --separate-output \
 		--backtitle "$program_full_name" \
 		--checklist "$infotext" $height $width $listheight \
-		 $1 2>&1 >/dev/tty
-		case $? in
-			0) ;; # Ok
-			1) exit 1 ;; # Cancel
-			*) error "whiptail error or user pressed ESC key."
-		esac
+		 $1 2>&1 >/dev/tty || exit 1
 	fi
 }
 
@@ -310,12 +305,7 @@ a special way due to lack of free inodes.'
 	else
 		whiptail --title "$title" --backtitle "$program_full_name" \
 		--noitem --menu "$infotext" $height $width $listheight \
-		 $(for i in $1; do printf '%s 1 ' "$i"; done) 2>&1 >/dev/tty
-		case $? in
-			0) ;; # Ok
-			1) exit 1 ;; # Cancel
-			*) error "whiptail error or user pressed ESC key."
-		esac
+		 $(for i in $1; do printf '%s 1 ' "$i"; done) 2>&1 >/dev/tty || exit 1
 	fi
 }
 
