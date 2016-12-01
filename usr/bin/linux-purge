@@ -238,11 +238,15 @@ $rdirs.*$regex" || note "Answer y to remove the files."
 }
 
 # Get kernels to purge interactively
-# $1 is list of tag string, item string and status string combinations.
-# (See manual page of whiptail or dialog for more information.)
+# $1 is space separated list of tag string, item string and status string
+# entries. (See manual page of whiptail or dialog for more information.)
+# Exits with 1 in case of an error.
 getReleasesToPurge() {
 	local -r title='Choose Which Kernels to Purge'
-	local -r height=$(($(tput lines)-5))
+	local -r height=$(($(tput lines)-6))
+	local -r width=60
+	[[ $(tput cols) -lt $width ]] && error "Terminal screen not wide enough. \
+Minimum is $width columns."
 	local -r legend_text="Legend of Content Inside Parentheses:
 * a plus sign (+), if the kernel is needed for updates
 * letter H, if the kernel is marked for hold
@@ -254,46 +258,64 @@ Free space on /boot: $(avail_boot) MB$([[ $boot != '/boot' ]] &&
 	printf ' (mounted at %s)' "$boot")
 $([[ $legend ]] && printf %s "$legend_text")"
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
+	local -r listheight=$((height-infolines-6))
+	[[ $listheight -lt 1 ]] && error "Not enough lines in terminal screen."
 	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --stdout --separate-output \
 		--backtitle "$program_full_name" --cr-wrap \
-		--checklist "$infotext" $height 60 $((height-infolines-6)) $1
+		--checklist "$infotext" $height $width $listheight $1
 		case $? in
 			$DIALOG_OK) clear >/dev/tty ;;
 			$DIALOG_ESC|$DIALOG_CANCEL) clear >/dev/tty ;&
-			*) exit 3
+			*) exit 1
 		esac
 	else
 		whiptail --title "$title" --separate-output \
 		--backtitle "$program_full_name" \
-		--checklist "$infotext" $height 60 $((height-infolines-6)) \
+		--checklist "$infotext" $height $width $listheight \
 		 $1 2>&1 >/dev/tty
-		[[ $? -eq 0 ]] || exit 3
+		case $? in
+			0) ;; # Ok
+			1) exit 1 ;; # Cancel
+			*) error "whiptail error or user pressed ESC key."
+		esac
 	fi
 }
 
+# Get kernel to purge interactively.
+# $1 is space separated list of kernel versions.
+# Exits with 1 in case of an error.
 getVersionToPurge() {
-	local -r height=$(($(tput lines)-5))
+	local -r height=$(($(tput lines)-6))
+	local -r width=60
+	[[ $(tput cols) -lt $width ]] && error "Terminal screen not wide enough. \
+Minimum is $width columns."
 	local -r title='Choose Which Linux Kernel to Purge'
 	local -r infotext='The program purges the chosen kernel in
 a special way due to lack of free inodes.'
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
+	local -r listheight=$((height-infolines-6))
+	[[ $listheight -lt 1 ]] && error "Not enough lines in terminal screen."
 	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --backtitle "$program_full_name" \
-		--cr-wrap --no-items --stdout --menu "$infotext" $height 60 \
-		 $((height-infolines-7)) $1
+		--cr-wrap --no-items --stdout --menu "$infotext" $height $width \
+		 $listheight $1
 		case $? in
 			$DIALOG_OK) clear >/dev/tty ;;
 			$DIALOG_ESC|$DIALOG_CANCEL) clear >/dev/tty ;&
-			*) exit 3
+			*) exit 1
 		esac
 	else
 		whiptail --title "$title" --backtitle "$program_full_name" \
-		--noitem --menu "$infotext" $height 60 $((height-infolines-7)) \
+		--noitem --menu "$infotext" $height $width $listheight \
 		 $(for i in $1; do printf '%s 1 ' "$i"; done) 2>&1 >/dev/tty
-		[[ $? -eq 0 ]] || exit 3
+		case $? in
+			0) ;; # Ok
+			1) exit 1 ;; # Cancel
+			*) error "whiptail error or user pressed ESC key."
+		esac
 	fi
 }
 
