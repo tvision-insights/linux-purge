@@ -31,7 +31,10 @@ export LC_ALL=C # Use C locale to get standard sorting and better regex
 readonly program_name='linux-purge' \
 program_full_name='Linux Purge for Ubuntu' \
 program_version='1.0' \
-MB=1000000
+MB=1000000 \
+width=60 \
+w_error='Terminal screen not wide enough. Minimum is $width columns.' \
+h_error='Not enough lines in terminal screen.'
 
 # Default values for command line options:
 keep= # explicit keep option not detected
@@ -244,9 +247,7 @@ $rdirs.*$regex" || note "Answer y to remove the files."
 getReleasesToPurge() {
 	local -r title='Choose Which Kernels to Purge'
 	local -r height=$(($(tput lines)-6))
-	local -r width=60
-	[[ $(tput cols) -lt $width ]] && error "Terminal screen not wide enough. \
-Minimum is $width columns."
+	[[ $(tput cols) -lt $width ]] && error "$w_error"
 	local -r legend_text="Legend of Content Inside Parentheses:
 * a plus sign (+), if the kernel is needed for updates
 * letter H, if the kernel is marked for hold
@@ -259,7 +260,7 @@ Free space on /boot: $(avail_boot) MB$([[ $boot != '/boot' ]] &&
 $([[ $legend ]] && printf %s "$legend_text")"
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	local -r listheight=$((height-infolines-6))
-	[[ $listheight -lt 1 ]] && error "Not enough lines in terminal screen."
+	[[ $listheight -lt 1 ]] && error "$h_error"
 	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --stdout --separate-output \
@@ -283,15 +284,13 @@ $([[ $legend ]] && printf %s "$legend_text")"
 # Exits with 1 in case of an error.
 getVersionToPurge() {
 	local -r height=$(($(tput lines)-6))
-	local -r width=60
-	[[ $(tput cols) -lt $width ]] && error "Terminal screen not wide enough. \
-Minimum is $width columns."
+	[[ $(tput cols) -lt $width ]] && error "$w_error"
 	local -r title='Choose Which Linux Kernel to Purge'
 	local -r infotext='The program purges the chosen kernel in
 a special way due to lack of free inodes.'
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	local -r listheight=$((height-infolines-6))
-	[[ $listheight -lt 1 ]] && error "Not enough lines in terminal screen."
+	[[ $listheight -lt 1 ]] && error "$h_error"
 	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --backtitle "$program_full_name" \
