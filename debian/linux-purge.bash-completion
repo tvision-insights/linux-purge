@@ -1,0 +1,16 @@
+_linux_purge() {
+	local cur prev words cword
+	_init_completion || return
+
+	local opts="-a -b -c -f -h -k -m -n -o -s -v -y --auto-only --clear-boot \
+--choose --fix --help --keep --manual --no-legend --optimize --simulate \
+--version --yes"
+	case $prev in
+		-k|--keep)
+			[[ $cur =~ ^[0-9]+$ ]] && COMPREPLY=( "$cur" ) || COMPREPLY=( );
+			return 0 ;;
+	esac
+
+	COMPREPLY=( $( compgen -W '$opts' -- "$cur" ) )
+	return 0
+} && complete -F _linux_purge linux-purge
