@@ -185,7 +185,7 @@ get_hold_releases() {
 }
 
 get_set_complement() {
-	comm -23 <(sort -Vu <(printf %s "$1")) <(sort -Vu <(printf %s "$2"))
+	comm -23 <(sort -u <(printf %s "$1")) <(sort -u <(printf %s "$2")) | sort -V
 }
 
 clear_boot() {
