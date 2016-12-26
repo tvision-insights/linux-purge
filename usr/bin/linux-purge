@@ -34,7 +34,8 @@ program_version='1.0' \
 MB=1000000 \
 width=60 \
 w_error='Terminal screen not wide enough. Minimum is $width columns.' \
-h_error='Not enough lines in terminal screen.'
+h_error='Not enough lines in terminal screen.' \
+lockfile='/var/lib/dpkg/lock'
 
 # Default values for command line options:
 keep= # explicit keep option not detected
@@ -649,11 +650,20 @@ PkgsToPurge=$(dpkg-query -W -f='${Status} ${Package}\n' |
  }')
 
 if [[ $PkgsToPurge ]]; then
-	# disable update-grub; restore after purging has finished.
-	# This will speed up purging somewhat.
-	[[ $optimize && $update_grub ]] && chmod -x "$update_grub" && {
-	  note "Made '$update_grub' non-executable temporarily to speed up purging."
-	  update_grub_disabled=1
+
+	[[ $simulate ]] || {
+		cmd=$(fuser -v "$lockfile" 2>&1 | awk 'NR == 2{print $5}')
+		[[ $cmd ]] && {
+			note "Waiting for $cmd to finish..."
+			while fuser "$lockfile" &>/dev/null; do sleep 1; done
+		}
+
+		# disable update-grub; restore after purging has finished.
+		# This will speed up purging somewhat.
+		[[ $optimize && $update_grub ]] && chmod -x "$update_grub" && {
+		  note "Made '$update_grub' non-executable temporarily to speed up purging."
+		  update_grub_disabled=1
+		}
 	}
 	apt-get $simulate $yes purge $PkgsToPurge || {
 		err_code=$?
