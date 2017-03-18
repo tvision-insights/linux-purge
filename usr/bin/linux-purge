@@ -8,7 +8,7 @@
 #
 #  Editing: Use tabulator width 4 for indentation.
 #
-#  Copyright (C) 2016 Jarno Ilari Suni <8@iki.fi>
+#  Copyright (C) 2017 Jarno Ilari Suni <8@iki.fi>
 #
 #    Author: Jarno Ilari Suni <8@iki.fi>
 #
@@ -149,7 +149,7 @@ sed 's/\t/    /g'
 
 show_version() {
 printf "GNU $program_full_name $program_version
-Copyright (C) 2016 Jarno Ilari Suni
+Copyright (C) 2017 Jarno Ilari Suni
 License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.\n"
@@ -170,7 +170,7 @@ avail_boot() {
 # Note: Depends on Ubuntu's naming policy of kernel meta packages
 get_latest_releases() {
 	dpkg-query -Wf='${Depends}\n' $(dpkg-query -W -f='${Package} ${Status}\n' |
-	awk '/^linux-(.+-)?image-[^0-9]+(-lts-[^ ]+)? (install|hold)/{print $1}') |
+	awk '/^linux-(.+-)?image-[^0-9]+(-(lts|hwe)-[^ ]+)? (install|hold)/{print $1}') |
 	sed -nr "s/.*\<linux-(.+-)?image-([0-9]+\.[^,]+).*/\2/p" | sort -Vu
 }
 
