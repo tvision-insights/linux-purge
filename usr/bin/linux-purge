@@ -436,7 +436,7 @@ executed in simulation mode, because it would be identical to the first run.'
 	fi
 
 	[[ $simulate ]] || note "Fixing finished successfully.
-HINT: Yoo may run the command again without --fix option to possibly purge \
+HINT: You may run the command again without --fix option to possibly purge \
 more versioned kernel packages."
 	:
 }
@@ -560,11 +560,12 @@ if [[ $Pkgs ]]; then
 is followed about its state:
 $Pkgs
 
-Refer to the manual page of dpkg for explanation of the package states.
-Hint: Run the command with --fix option.
+(Refer to the documentation of dpkg for explanation of the package states.)
+
+Hint: Run this command with --fix option.
 Note: If a package flag is reinst-required (instead of ok) for some package, \
 you probably have to reinstall the package by \`apt-get install --reinstall\` \
-first. If that fails, you may run the command using --fix option." 3
+first. If that fails, you may run this command using --fix option." 3
 fi
 
 # get list of succesfully installed releses with status install or hold
