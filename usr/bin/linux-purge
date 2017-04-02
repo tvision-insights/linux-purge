@@ -189,9 +189,33 @@ get_set_complement() {
 	comm -23 <(sort -u <(printf %s "$1")) <(sort -u <(printf %s "$2")) | sort -V
 }
 
+# Delete extra initrd.img backups (LP: #1515513)
+remove_extra_initrds() {
+	local old_dir=$(pwd)
+	cd /boot
+	local initrd_releases=$(ls initrd.img-* |
+	 sed -r -e '/.*\.old-dkms$/d' -e '/.*\.bak$/d' -e 's/initrd\.img-(.*)/\1/')
+	local initrd_backup_releases=$(ls initrd.img-*.old-dkms initrd.img-*.bak 2>/dev/null |
+	 sed -r 's/initrd\.img-(.*)\.(old-dkms|bak)$/\1/')
+	local extra_backups=$(for release in \
+	$(get_set_complement "$initrd_backup_releases" "$initrd_releases"); do
+	 echo initrd.img-${release}.*
+	done)
+
+	[[ $extra_backups ]] && {
+		[[ $yes ]] && note "Removing extra initrd.img backups at /boot" || {
+			read -r -p "
+Remove the extra initrd.img backup file(s)
+$(printf '%s\n' $extra_backups)
+at /boot? (Y/n) : " response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
+		rm -v $extra_backups
+	}
+	cd "$old_dir"
+}
+
+# Handle possible kernel files unknown to the package management system.
+# http://askubuntu.com/a/779077/21005
 clear_boot() {
-	# Handle possible kernel files unknown to the package management system.
-	# http://askubuntu.com/a/779077/21005
 	local ReleasesKnownToDpkg=$(dpkg-query -W -f='${Package}\n' |
 	sed -nr "s/linux-image-([0-9]+\..+)/\1/p")
 	local ReleasesOnBoot=$(ls /boot/vmlinuz-* |
@@ -310,6 +334,7 @@ a special way due to lack of free inodes.'
 }
 
 run_fix() {
+	remove_extra_initrds
 	if [[ $(stat -f --format="%d" /var) -lt 10 ]]; then
 	# /var is about to run out of inodes. dpkg and apt-get
 	# may not be able to operate.
@@ -680,4 +705,6 @@ Hint: try running the command with --fix option." 3
 	}
 	[[ $update_grub_disabled ]] && run_update_grub
 fi
+
+[[ $simulate ]] || remove_extra_initrds
 :
