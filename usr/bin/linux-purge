@@ -347,6 +347,8 @@ run_fix() {
 			note "Removing $dir"
 			[[ $simulate ]] || rm -rf "$dir"
 		done
+		note "Removing matching initrd image(s). (LP: #1678187)"
+		[[ $simulate ]] || rm -fv /boot/initrd.img-"${version}"-*
 		note "Purging the kernel by dpkg ..."
 		dpkg --purge --abort-after=50 $simulate \
 		$(dpkg-query -W -f='${Status} ${Package}\n' |
@@ -359,6 +361,7 @@ run_fix() {
 		note "Purging finished successfully."
 	fi
 
+	note "Running 'apt-get -f install'"
 	if ! apt-get -f $simulate install; then
 		InstalledReleases=$(dpkg-query -W -f='${Status} ${Package}\n' |
 		sed -nr "s/^[^ ]+ ok installed linux-image-([0-9]+\..+)/\1/p" |
@@ -409,6 +412,9 @@ space on /boot, purging some kernels will help."
 			 done)") || exit 3
 		}
 		for release in $ReleasesToPurge; do
+			note "Removing matching initrd image. (LP: #1678187)"
+			[[ $simulate ]] || rm -fv /boot/initrd.img-"${release}"{,.*}
+			note "Purging the kernel by dpkg ..."
 			dpkg --purge --abort-after=50 $simulate \
 				$(dpkg-query -W -f='${Package}\n' |
 				awk '/^linux-.+-'"$(escape_regex "$release")"'$/') ||
