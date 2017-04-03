@@ -35,7 +35,9 @@ MB=1000000 \
 width=60 \
 w_error='Terminal screen not wide enough. Minimum is $width columns.' \
 h_error='Not enough lines in terminal screen.' \
-lockfile='/var/lib/dpkg/lock'
+lockfile='/var/lib/dpkg/lock' \
+current=$(uname -r) \
+boot=$(stat  --format="%m" /boot) # = mount point under which /boot is found
 
 # Default values for command line options:
 keep= # explicit keep option not detected
@@ -48,6 +50,7 @@ yes= # interactive mode
 manual= # do not mark manually installed for purge
 legend=1 # display legend in checklist by default
 optimize= # Do not optimize by default
+unknown_current= # Will be set non-null, if current kernel is unknown to dpkg
 
 # update-grub control variables
 update_grub_disabled=
@@ -59,6 +62,10 @@ unset -v LatestReleases ManualReleases HoldReleases
 error() {
 	printf '[%s] ERROR: %s\n' "$program_name" "$1" | fold -s >&2
 	exit ${2:-1}
+}
+
+warn() {
+	printf '[%s] WARNING: %s\n' "$program_name" "$1" | fold -s >&2
 }
 
 note() {
@@ -219,7 +226,9 @@ clear_boot() {
 	local ReleasesKnownToDpkg=$(dpkg-query -W -f='${Package}\n' |
 	sed -nr "s/linux-image-([0-9]+\..+)/\1/p")
 	local ReleasesOnBoot=$(ls /boot/vmlinuz-* |
-	 sed -nr -e 's#\.efi\.signed$##' -e 's#/boot/vmlinuz-([0-9]+\..+)#\1#p')
+	 sed -nr -e 's#\.efi\.signed$##' -e 's#/boot/vmlinuz-([0-9]+\..+)#\1#p' |
+	  grep -vFx "$current")
+	[[ $unknown_current ]] && note 'Not going to remove current kernel.'
 	local UnknownReleases=$(get_set_complement "$ReleasesOnBoot" \
 	 "$ReleasesKnownToDpkg")
 	[[ $UnknownReleases ]] && {
@@ -565,22 +574,23 @@ error "Must be run as root, if not in simulation mode. Hint:
 	update_grub=$(command -v update-grub || true)
 	[[ $update_grub ]] && chmod +x "$update_grub"
 }
-current=$(uname -r)
-# = currently booted kernel release
-boot=$(stat  --format="%m" /boot)
-# = mount point under which /boot is found
 
 if [[ $fix ]]; then
 	run_fix
 	exit
 fi
+
 # normal purging mode
 
-dpkg-query -W -f='${Status}\n' "linux-image-$current" |
- grep -qE "^(install|hold) ok installed" ||
-error "Current kernel linux-image-$current is not successfully installed or it \
-is marked for removal." 3
-# current kernel is successfully installed and wanted as such
+if status=$(dpkg-query -W -f='${Status}\n' "linux-image-$current" 2>/dev/null); then
+	grep -qE "^(install|hold) ok installed" <<<"$status" ||
+	error "Current kernel package linux-image-$current is not successfully \
+installed or it is marked for removal." 3
+	# current kernel is successfully installed and wanted as such
+else
+	warn "Current kernel $current is unknown to dpkg."
+	unknown_current=1
+fi
 
 # Create list of unsuccessfully/partially installed packages.
 Pkgs=$(dpkg-query -W -f='${Package} ${Status}\n' 'linux-*' |
