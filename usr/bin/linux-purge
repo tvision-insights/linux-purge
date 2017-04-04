@@ -384,7 +384,7 @@ run_fix() {
 		note "Removing matching initrd image(s). (LP: #1678187)"
 		[[ $simulate ]] || rm -fv /boot/initrd.img-"${version}"-*
 		note "Purging the kernel by dpkg ..."
-		dpkg --purge --abort-after=50 $simulate \
+		dpkg --purge --abort-after=1 $simulate \
 		$(dpkg-query -W -f='${Status} ${Package}\n' |
 		 awk '/^[^ ]+ ok installed linux-.+-'"$(escape_regex "${version}")"\
 '(-.*)?$/{print $4}') || {
@@ -449,7 +449,7 @@ space on /boot, purging some kernels will help."
 			note "Removing matching initrd image. (LP: #1678187)"
 			[[ $simulate ]] || rm -fv /boot/initrd.img-"${release}"{,.*}
 			note "Purging the kernel by dpkg ..."
-			dpkg --purge --abort-after=50 $simulate \
+			dpkg --purge --abort-after=1 $simulate \
 				$(dpkg-query -W -f='${Package}\n' |
 				awk '/^linux-.+-'"$(escape_regex "$release")"'$/') ||
 					error "Purging by dpkg failed; dpkg error $?." 3
