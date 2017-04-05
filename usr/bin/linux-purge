@@ -38,6 +38,8 @@ h_error='Not enough lines in terminal screen.' \
 lockfile='/var/lib/dpkg/lock' \
 current=$(uname -r) \
 boot=$(stat  --format="%m" /boot) # = mount point under which /boot is found
+readonly cs=';' # column separator used for dialog command. Will be displayed
+# as is with whiptail command. It should not contain space.
 
 # Default values for command line options:
 keep= # explicit keep option not detected
@@ -52,6 +54,7 @@ legend=1 # display legend in checklist by default
 optimize= # Do not optimize by default
 unknown_current= # Will be set non-null, if current kernel is unknown to dpkg
 error_called=
+use_dialog= # use whiptail instead of dialog by default
 
 # update-grub control variables
 update_grub_disabled=
@@ -292,7 +295,7 @@ getReleasesToPurge() {
 	local -r title='Choose Which Kernels to Purge'
 	local -r height=$(($(tput lines)-6))
 	[[ $(tput cols) -lt $width ]] && error "$w_error"
-	local -r legend_text="Legend of Content Inside Parentheses:
+	local -r legend_text="Legend of Content On Right:
 * a plus sign (+), if the kernel is needed for updates
 * letter H, if the kernel is marked for hold
 * letter M, if the kernel is manually installed
@@ -305,10 +308,10 @@ $([[ $legend ]] && printf %s "$legend_text")"
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	local -r listheight=$((height-infolines-6))
 	[[ $listheight -lt 1 ]] && error "$h_error"
-	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
+	if [[ $use_dialog ]]; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --stdout --separate-output \
-		--backtitle "$program_full_name" --cr-wrap \
+		--backtitle "$program_full_name" --cr-wrap --column-separator $cs \
 		--checklist "$infotext" $height $width $listheight $1 ||
 		case $? in
 			$DIALOG_ESC|$DIALOG_CANCEL) clear >/dev/tty; exit 1 ;;
@@ -336,7 +339,7 @@ a special way due to lack of free inodes.'
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	local -r listheight=$((height-infolines-6))
 	[[ $listheight -lt 1 ]] && error "$h_error"
-	if [[ ${USE_DIALOG+x} ]] && hash dialog 2>/dev/null; then
+	if [[ $use_dialog ]]; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --backtitle "$program_full_name" \
 		--cr-wrap --no-items --stdout --menu "$infotext" $height $width \
@@ -449,9 +452,11 @@ space on /boot, purging some kernels will help."
 			ReleasesToPurge=$(getReleasesToPurge "$(for release in $okReleases
 			 do
 				mark=
-				printf %s "$HoldReleases" | grep -Fxq -e "$release" && mark+=H
-				printf %s "$ManualReleases" | grep -Fxq -e "$release" && mark+=M
-				printf '%s (%s%s) %s ' "$release" "$mark" $(((0$(stat \
+				printf %s "$HoldReleases" | grep -Fxq -e "$release" &&
+				 mark+=H || mark+='_'
+				printf %s "$ManualReleases" | grep -Fxq -e "$release" &&
+				 mark+=M || mark+='_'
+				printf '%s %s%s%s %s ' "$release" "$mark" "$cs" $(((0$(stat \
 				--printf='+%s' /boot/*-$release{,.efi.signed} \
 				2>/dev/null))/$MB)) off
 			 done)") || exit 3
@@ -588,6 +593,11 @@ error "Must be run as root, if not in simulation mode. Hint:
 	[[ $update_grub ]] && chmod +x "$update_grub"
 }
 
+[[ ${USE_DIALOG+x} ]] && {
+	hash dialog 2>/dev/null && use_dialog=1 ||
+	 note 'Using whiptail, if needed, because dialog is not installed.'
+}
+
 if [[ $fix ]]; then
 	run_fix
 	exit
@@ -669,12 +679,15 @@ if [[ $choose ]]; then
 	Items="$(for release in $Releases; do
 		if [[ $release != $current ]]; then
 			mark=
-			printf %s "$LatestReleases" | grep -Fxq -e "$release" && mark+='+'
-			printf %s "$HoldReleases" | grep -Fxq -e "$release" && mark+=H
-			printf %s "$ManualReleases" | grep -Fxq -e "$release" && mark+=M
+			printf %s "$LatestReleases" | grep -Fxq -e "$release" &&
+			 mark+='+' || mark+='_'
+			printf %s "$HoldReleases" | grep -Fxq -e "$release" && mark+=H ||
+			 mark+='_'
+			printf %s "$ManualReleases" | grep -Fxq -e "$release" && mark+=M ||
+			 mark+='_'
 			printf %s "$ReleasesToKeep" | grep -Fxq -e "$release" &&
 			 status=off || status=on
-			printf '%s (%s%s) %s ' "$release" "$mark" $(((0$(stat \
+			printf '%s %s%s%s %s ' "$release" "$mark" "$cs" $(((0$(stat \
 			 --printf='+%s' /boot/*-$release{,.efi.signed} 2>/dev/null))/$MB)) \
 			$status
 		fi
