@@ -386,7 +386,7 @@ run_fix() {
 		[[ $okVersions ]] || error "No suitable version to purge." 3
 		[[ $(printf %s "$okVersions" | wc -w) == 1 ]] && version=$okVersions ||
 		 version=$(getVersionToPurge "$okVersions") || exit 3
-		[[ $version ]] || error "No suitable version to purge." 3
+
 		for dir in /usr/src/linux-headers-${version}/ \
 		 /usr/src/linux-headers-${version}-*/; do
 			note "Removing $dir"
@@ -455,8 +455,9 @@ space on /boot, purging some kernels will help."
 				--printf='+%s' /boot/*-$release{,.efi.signed} \
 				2>/dev/null))/$MB)) off
 			 done)") || exit 3
+			[[ $ReleasesToPurge ]] ||
+				error 'You should have chosen at least one release.' 3
 		}
-
 		for release in $ReleasesToPurge; do
 			note "Removing matching initrd image. (LP: #1678187)"
 			[[ $simulate ]] || rm -fv /boot/initrd.img-"${release}"{,.*}
