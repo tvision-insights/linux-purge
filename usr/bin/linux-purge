@@ -24,7 +24,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-set -u +e
+set -u -e
 export LC_ALL=C # Use C locale to get standard sorting and better regex
 # performance.
 
@@ -51,6 +51,7 @@ manual= # do not mark manually installed for purge
 legend=1 # display legend in checklist by default
 optimize= # Do not optimize by default
 unknown_current= # Will be set non-null, if current kernel is unknown to dpkg
+error_called=
 
 # update-grub control variables
 update_grub_disabled=
@@ -61,6 +62,7 @@ unset -v LatestReleases ManualReleases HoldReleases
 
 error() {
 	printf '[%s] ERROR: %s\n' "$program_name" "$1" | fold -s >&2
+	error_called=1
 	exit ${2:-1}
 }
 
@@ -80,9 +82,16 @@ restore_update_grub() {
 	fi
 }
 
+finnish() {
+	err=$?
+	[[ $error_called ]] && err=0
+	restore_update_grub
+	[[ $err -eq 0 ]] || error "Aborting due to an unknown error ($err)." 3
+}
+
 # NOTE: in case of power cut this will not be done and update-grub may
 # be left non-executable!
-trap restore_update_grub EXIT
+trap finnish EXIT
 
 run_update_grub() {
 	restore_update_grub
@@ -277,7 +286,8 @@ $rdirs.*$regex" || note "Answer y to remove the files."
 # Get kernels to purge interactively
 # $1 is space separated list of tag string, item string and status string
 # entries. (See manual page of whiptail or dialog for more information.)
-# Exits with 1 in case of an error.
+# Exits with 0 in success, 1 in case of cancel, other value in case of possible
+# error.
 getReleasesToPurge() {
 	local -r title='Choose Which Kernels to Purge'
 	local -r height=$(($(tput lines)-6))
@@ -299,23 +309,24 @@ $([[ $legend ]] && printf %s "$legend_text")"
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --stdout --separate-output \
 		--backtitle "$program_full_name" --cr-wrap \
-		--checklist "$infotext" $height $width $listheight $1
+		--checklist "$infotext" $height $width $listheight $1 ||
 		case $? in
-			$DIALOG_OK) clear >/dev/tty ;;
-			$DIALOG_ESC|$DIALOG_CANCEL) clear >/dev/tty ;&
-			*) exit 1
+			$DIALOG_ESC|$DIALOG_CANCEL) clear >/dev/tty; exit 1 ;;
+			*) exit 2
 		esac
+		clear >/dev/tty
 	else
 		whiptail --title "$title" --separate-output \
 		--backtitle "$program_full_name" \
 		--checklist "$infotext" $height $width $listheight \
-		 $1 2>&1 >/dev/tty || exit 1
+		 $1 2>&1 >/dev/tty
 	fi
 }
 
 # Get kernel to purge interactively.
 # $1 is space separated list of kernel versions.
-# Exits with 1 in case of an error.
+# Exits with 0 in success, 1 in case of cancel, other value in case of possible
+# error.
 getVersionToPurge() {
 	local -r height=$(($(tput lines)-6))
 	[[ $(tput cols) -lt $width ]] && error "$w_error"
@@ -329,16 +340,16 @@ a special way due to lack of free inodes.'
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --backtitle "$program_full_name" \
 		--cr-wrap --no-items --stdout --menu "$infotext" $height $width \
-		 $listheight $1
+		 $listheight $1 ||
 		case $? in
-			$DIALOG_OK) clear >/dev/tty ;;
-			$DIALOG_ESC|$DIALOG_CANCEL) clear >/dev/tty ;&
-			*) exit 1
+			$DIALOG_ESC|$DIALOG_CANCEL) clear >/dev/tty; exit 1 ;;
+			*) exit 2
 		esac
+		clear >/dev/tty
 	else
 		whiptail --title "$title" --backtitle "$program_full_name" \
 		--noitem --menu "$infotext" $height $width $listheight \
-		 $(for i in $1; do printf '%s 1 ' "$i"; done) 2>&1 >/dev/tty || exit 1
+		 $(for i in $1; do printf '%s 1 ' "$i"; done) 2>&1 >/dev/tty
 	fi
 }
 
@@ -445,6 +456,7 @@ space on /boot, purging some kernels will help."
 				2>/dev/null))/$MB)) off
 			 done)") || exit 3
 		}
+
 		for release in $ReleasesToPurge; do
 			note "Removing matching initrd image. (LP: #1678187)"
 			[[ $simulate ]] || rm -fv /boot/initrd.img-"${release}"{,.*}
@@ -485,18 +497,18 @@ more versioned kernel packages."
 
 # Handle command line options
 
-env -u GETOPT_COMPATIBLE getopt --test >/dev/null
+env -u GETOPT_COMPATIBLE getopt --test >/dev/null ||
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
 params=$(env -u GETOPT_COMPATIBLE getopt -o abcfhk:mnosvy -l auto-only,\
 clear-boot,choose,fix,help,keep:,manual,no-legend,optimize,simulate,version,\
-yes --name "[$program_name] ERROR" -- "$@")
-err_code=$?
-case $err_code in
-	0) ;;
-	1) exit 1 ;;
-	*) error "getopt exited with error code $err_code" 3
-esac
+yes --name "[$program_name] ERROR" -- "$@") || {
+	err_code=$?
+	case $err_code in
+		1) error_called=1; exit 1 ;;
+		*) error "getopt exited with error code $err_code" 3
+	esac
+}
 
 eval set -- "$params"
 unset params
@@ -670,7 +682,10 @@ if [[ $choose ]]; then
 		note "No kernels to choose from. Just clear the junk..."
 		ReleasesToPurge=
 	else
-		ReleasesToPurge=$(getReleasesToPurge "$Items") || exit 3
+		ReleasesToPurge=$(getReleasesToPurge "$Items") || { err_code=$?;
+			[[ $err_code -eq 1 ]] && exit 0 || [[ $err_code -eq 255 ]] &&
+			 error 'Whiptail error, or user pressed escape' 255 ||
+			  error 'Dialog error' 4; }
 	fi
 	if [[ $ReleasesToPurge ]]; then
 		ReleasesToKeep=$(get_set_complement "$Releases" "$ReleasesToPurge")
