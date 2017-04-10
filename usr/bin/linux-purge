@@ -210,6 +210,10 @@ get_set_complement() {
 
 # Delete extra initrd.img backups (LP: #1515513)
 remove_extra_initrds() {
+	# First remove possible leftover temporary mkinitramfs files
+	# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=814345
+	rm -rfv ${TMPDIR:-/var/tmp}/mkinitramfs-*
+
 	local old_dir=$(pwd)
 	cd /boot
 	local initrd_releases=$(ls initrd.img-* |
