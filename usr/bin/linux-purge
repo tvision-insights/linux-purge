@@ -182,7 +182,7 @@ escape_regex() {
 
 # Print megabytes availabe on /boot
 avail_boot() {
-	printf %s $(($(stat -f --format="%a*%S" /boot)/MB))
+	printf %s $(($(stat -f --format="%f*%S" /boot)/MB))
 }
 
 # Get the list of Linux releases that have depending kernel meta packages.
@@ -424,7 +424,7 @@ run_fix() {
 $(avail_boot) MB free space on /boot. $([[ $boot != '/boot' ]] && printf "The \
 containing partition is mounted at %s." $boot) $([[ $last_release ]] &&
 		printf 'Latest successfully installed kernel takes %s MB on /boot.' \
-		$(((0$(stat --printf='+%s' /boot/*-$last_release{,.efi.signed} \
+		$(((0$(stat --printf='+%b*%B' /boot/*-$last_release{,.*} \
 		 2>/dev/null))/MB))) If the dependency problem is due to insufficient \
 space on /boot, purging some kernels will help."
 
@@ -461,7 +461,7 @@ space on /boot, purging some kernels will help."
 				printf %s "$ManualReleases" | grep -Fxq -e "$release" &&
 				 mark+=M || mark+='_'
 				printf '%s %s%s%s %s ' "$release" "$mark" "$cs" $(((0$(stat \
-				--printf='+%s' /boot/*-$release{,.efi.signed} \
+				--printf='+%b*%B' /boot/*-$release{,.*} \
 				2>/dev/null))/$MB)) off
 			 done)") || exit 3
 			[[ $ReleasesToPurge ]] ||
@@ -692,7 +692,7 @@ if [[ $choose ]]; then
 			printf %s "$ReleasesToKeep" | grep -Fxq -e "$release" &&
 			 status=off || status=on
 			printf '%s %s%s%s %s ' "$release" "$mark" "$cs" $(((0$(stat \
-			 --printf='+%s' /boot/*-$release{,.efi.signed} 2>/dev/null))/$MB)) \
+			 --printf='+%b*%B' /boot/*-$release{,.*} 2>/dev/null))/$MB)) \
 			$status
 		fi
 	done)"
