@@ -625,15 +625,14 @@ Pkgs=$(dpkg-query -W -f='${Package} ${Status}\n' 'linux-*' |
  ')
 if [[ $Pkgs ]]; then
 	error "The following kernel packages have invalid state; each package name \
-is followed about its state:
+is followed by its state:
 $Pkgs
 
 (Refer to the documentation of dpkg for explanation of the package states.)
 
 Hint: Run this command with --fix option.
-Note: If a package flag is reinst-required (instead of ok) for some package, \
-you probably have to reinstall the package by \`apt-get install --reinstall\` \
-first. If that fails, you may run this command using --fix option." 3
+Hint: If a package flag is 'reinst-required' (instead of 'ok') for some package, \
+you may have to reinstall the package by 'apt-get install --reinstall'." 3
 fi
 
 # get list of succesfully installed releses with status install or hold
