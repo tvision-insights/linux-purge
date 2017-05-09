@@ -185,6 +185,12 @@ avail_boot() {
 	printf %s $(($(stat -f --format="%f*%S" /boot)/MB))
 }
 
+# Print megabytes allocated in /boot for release given in $1
+get_release_size_boot() {
+	printf %s $(((0$(stat --printf='+%b*%B' /boot/*-$1{,.*} \
+	2>/dev/null))/MB))
+}
+
 # Get the list of Linux releases that have depending kernel meta packages.
 # Note: Depends on Ubuntu's naming policy of kernel meta packages
 get_latest_releases() {
@@ -305,7 +311,8 @@ getReleasesToPurge() {
 * letter M, if the kernel is manually installed
 * the size of the kernel within /boot in megabytes
 Hint: Space bar toggles item's selection."
-	local -r infotext="Booted kernel: $current
+	local -r infotext="Booted kernel: $current \
+($(get_release_size_boot $current) MB)
 Free space on /boot: $(avail_boot) MB$([[ $boot != '/boot' ]] &&
 	printf ' (mounted at %s)' "$boot")
 $([[ $legend ]] && printf %s "$legend_text")"
@@ -360,142 +367,155 @@ a special way due to lack of free inodes.'
 	fi
 }
 
-run_fix() {
-	remove_extra_initrds
-	if [[ $(stat -f --format="%d" /var) -lt 10 ]]; then
-	# /var is about to run out of inodes. dpkg and apt-get
-	# may not be able to operate.
-	# (10 is an estimate of the number of needed free inodes.)
-		varmp=$(stat --format="%m" /var)
-		usrmp=$(stat --format="%m"  /usr/src)
-		[[ $varmp != $usrmp ]] &&
-		 error "Too few inodes on the filesystem mounted at $varmp."
-		# Try freeing some inodes by removing some files from /usr/src.
-		# Prompt for one kernel to remove, if there are many to choose from.
-		HeaderVersions=$(dpkg-query -W -f='${Status} ${Package}\n' |
-		sed -rn "s/^[^ ]+ ok installed linux-headers-([0-9.]+-[^-]+)$/\1/p" |
-		 sort -V)
-		HeaderVersions=$(get_set_complement "$HeaderVersions" \
-		"$(printf '%s\n%s\n%s' \
-		 "$(get_latest_releases | cut -d'-' -f1,2)" \
-		 "$(printf %s "$current" | cut -d'-' -f1,2)" \
-		 "$(dpkg-query -W -f='${Status} ${Package}\n' |
-		   sed -nr 's/hold ok installed linux-image-([0-9.]+-[^-]+).*/\1/p')")")
-		# Restrict to versions that have related linux packages "ok".
-		okVersions=
-		for version in $HeaderVersions; do
-			[[ $(dpkg-query -W -f='${Status} ${Package}\n' |
-			awk '$4 ~ /linux-.+-'"$(escape_regex "$version")"'(-.*)?$/{
-				if($2!="ok"){e=1;exit}
-			}END{print e}') ]] || okVersions+="$version "
-		done
-		okVersions=${okVersions%% }
-		[[ $okVersions ]] || error "No suitable version to purge." 3
-		[[ $(printf %s "$okVersions" | wc -w) == 1 ]] && version=$okVersions ||
-		 version=$(getVersionToPurge "$okVersions") || exit 3
+free_some_inodes() {
+	local varmp=$(stat --format="%m" /var)
+	local usrmp=$(stat --format="%m"  /usr/src)
+	[[ $varmp != $usrmp ]] &&
+	 error "Too few inodes on the filesystem mounted at $varmp." 3
+	# Try freeing some inodes by removing some files from /usr/src.
+	# Prompt for one kernel to remove, if there are many to choose from.
+	local HeaderVersions=$(dpkg-query -W -f='${Status} ${Package}\n' |
+	sed -rn "s/^[^ ]+ ok installed linux-headers-([0-9.]+-[^-]+)$/\1/p" |
+	 sort -V)
+	HeaderVersions=$(get_set_complement "$HeaderVersions" \
+	"$(printf '%s\n%s\n%s' \
+	 "$(get_latest_releases | cut -d'-' -f1,2)" \
+	 "$(printf %s "$current" | cut -d'-' -f1,2)" \
+	 "$(dpkg-query -W -f='${Status} ${Package}\n' |
+	   sed -nr 's/hold ok installed linux-image-([0-9.]+-[^-]+).*/\1/p')")")
+	# Restrict to versions that have related linux packages "ok".
+	local version okVersions=
+	for version in $HeaderVersions; do
+		[[ $(dpkg-query -W -f='${Status} ${Package}\n' |
+		awk '$4 ~ /linux-.+-'"$(escape_regex "$version")"'(-.*)?$/{
+			if($2!="ok"){e=1;exit}
+		}END{print e}') ]] || okVersions+="$version "
+	done
+	okVersions=${okVersions%% }
+	[[ $okVersions ]] || error "No suitable version to purge." 3
+	[[ $(printf %s "$okVersions" | wc -w) == 1 ]] && version=$okVersions ||
+	 version=$(getVersionToPurge "$okVersions") || exit 3
 
-		for dir in /usr/src/linux-headers-${version}/ \
-		 /usr/src/linux-headers-${version}-*/; do
-			note "Removing $dir"
-			[[ $simulate ]] || rm -rf "$dir"
-		done
-		note "Removing matching initrd image(s). (LP: #1678187)"
-		[[ $simulate ]] || rm -fv /boot/initrd.img-"${version}"-*
+	local dir
+	for dir in /usr/src/linux-headers-${version}/ \
+	 /usr/src/linux-headers-${version}-*/; do
+		note "Removing $dir"
+		[[ $simulate ]] || rm -rf "$dir"
+	done
+	note "Removing matching initrd image(s). (LP: #1678187)"
+	[[ $simulate ]] || rm -fv /boot/initrd.img-"${version}"-*
+	note "Purging the kernel by dpkg ..."
+	dpkg --purge --abort-after=1 $simulate \
+	$(dpkg-query -W -f='${Status} ${Package}\n' |
+	 awk '/^[^ ]+ ok installed linux-.+-'"$(escape_regex "${version}")"\
+'(-.*)?$/{print $4}') || {
+		error "Purging by dpkg failed; dpkg error $?." 3
+		# NOTE: some packages may have selection state
+		# "purge" after this.
+	}
+	note "Purging finished successfully."
+}
+
+purge_manually() {
+	# Restrict to releases that have related linux packages "ok".
+	local release version flavour okReleases=
+	InstalledReleases=$(dpkg-query -W -f='${Status} ${Package}\n' \
+	| sed -nr "s/^[^ ]+ ok installed linux-image-([0-9]+\..+)/\1/p" \
+	| sort -V)
+	for release in $(get_set_complement "$InstalledReleases" \
+	"$(printf '%s\n%s' "$(get_latest_releases)" "$current")"); do
+		version=$(printf %s "$release" | cut -d- -f1,2)
+		flavour=$(printf %s "$release" | cut -d- -f3-)
+		[[ $(dpkg-query -W -f='${Status} ${Package}\n' |
+		awk '$4 ~ /linux-.+-'"$(escape_regex "$version")"'(-'"$(\
+		 escape_regex "$flavour")"')?$/{if($2!="ok"){e=1;exit}
+		}END{print e}') ]] || okReleases+="$release "
+	done
+
+	okReleases=${okReleases%% }
+
+	[[ $okReleases ]] || error "Could not find a safe kernel to purge." 3
+
+	# Choose kernel(s) interactively.
+	local ReleasesToPurge
+	[[ $(printf %s "$okReleases" | wc -w) == 1 ]] &&
+	 ReleasesToPurge=$okReleases || {
+		local ManualReleases=$(get_manual_releases)
+		local HoldReleases=$(get_hold_releases)
+		local ReleasesToPurge=$(getReleasesToPurge "$(for release in $okReleases
+		 do
+			mark=
+			printf %s "$HoldReleases" | grep -Fxq -e "$release" &&
+			 mark+=H || mark+='_'
+			printf %s "$ManualReleases" | grep -Fxq -e "$release" &&
+			 mark+=M || mark+='_'
+			printf '%s %s%s%s %s ' "$release" "$mark" "$cs" \
+			 $(get_release_size_boot $release) off
+		 done)") || exit 3
+		[[ $ReleasesToPurge ]] ||
+			error 'You should have chosen at least one release.' 3
+	}
+	for release in $ReleasesToPurge; do
+		note "Removing matching initrd image. (LP: #1678187)"
+		[[ $simulate ]] || rm -fv /boot/initrd.img-"${release}"{,.*}
 		note "Purging the kernel by dpkg ..."
 		dpkg --purge --abort-after=1 $simulate \
-		$(dpkg-query -W -f='${Status} ${Package}\n' |
-		 awk '/^[^ ]+ ok installed linux-.+-'"$(escape_regex "${version}")"\
-'(-.*)?$/{print $4}') || {
-			error "Purging by dpkg failed; dpkg error $?." 3
-			# NOTE: some packages may have selection state
-			# "purge" after this.
-		}
-		note "Purging finished successfully."
-	fi
-
-	note "Running 'apt-get -f install'"
-	if ! apt-get -f $simulate install; then
-		InstalledReleases=$(dpkg-query -W -f='${Status} ${Package}\n' |
-		sed -nr "s/^[^ ]+ ok installed linux-image-([0-9]+\..+)/\1/p" |
-		sort -V)
-		last_release=$(printf %s "$InstalledReleases" | tail -n 1)
-		printf '\n'
-		note "Could not check or fix dependency problem. There is currently \
-$(avail_boot) MB free space on /boot. $([[ $boot != '/boot' ]] && printf "The \
-containing partition is mounted at %s." $boot) $([[ $last_release ]] &&
-		printf 'Latest successfully installed kernel takes %s MB on /boot.' \
-		$(((0$(stat --printf='+%b*%B' /boot/*-$last_release{,.*} \
-		 2>/dev/null))/MB))) If the dependency problem is due to insufficient \
-space on /boot, purging some kernels will help."
-
-		# Restrict to releases that have related linux packages "ok".
-		okReleases=
-		for release in $(get_set_complement "$InstalledReleases" \
-		"$(printf '%s\n%s' "$(get_latest_releases)" "$current")"); do
-			version=$(printf %s "$release" | cut -d- -f1,2)
-			flavour=$(printf %s "$release" | cut -d- -f3-)
-			[[ $(dpkg-query -W -f='${Status} ${Package}\n' |
-			awk '$4 ~ /linux-.+-'"$(escape_regex "$version")"'(-'"$(\
-			 escape_regex "$flavour")"')?$/{if($2!="ok"){e=1;exit}
-			}END{print e}') ]] || okReleases+="$release "
-		done
-
-		okReleases=${okReleases%% }
-
-		[[ $okReleases ]] || error "Could not find a safe kernel to purge." 3
-
-		read -r -p "Continue to manual purging of kernel(s)? (Y/n) : " response
-		[[ ! ${response,,} =~ ^(y|$) ]] &&
-		 error 'Could not fix the dependency problem.' 3
-
-		# Choose kernel(s) interactively.
-		[[ $(printf %s "$okReleases" | wc -w) == 1 ]] &&
-		 ReleasesToPurge=$okReleases || {
-			ManualReleases=$(get_manual_releases)
-			HoldReleases=$(get_hold_releases)
-			ReleasesToPurge=$(getReleasesToPurge "$(for release in $okReleases
-			 do
-				mark=
-				printf %s "$HoldReleases" | grep -Fxq -e "$release" &&
-				 mark+=H || mark+='_'
-				printf %s "$ManualReleases" | grep -Fxq -e "$release" &&
-				 mark+=M || mark+='_'
-				printf '%s %s%s%s %s ' "$release" "$mark" "$cs" $(((0$(stat \
-				--printf='+%b*%B' /boot/*-$release{,.*} \
-				2>/dev/null))/$MB)) off
-			 done)") || exit 3
-			[[ $ReleasesToPurge ]] ||
-				error 'You should have chosen at least one release.' 3
-		}
-		for release in $ReleasesToPurge; do
-			note "Removing matching initrd image. (LP: #1678187)"
-			[[ $simulate ]] || rm -fv /boot/initrd.img-"${release}"{,.*}
-			note "Purging the kernel by dpkg ..."
-			dpkg --purge --abort-after=1 $simulate \
-				$(dpkg-query -W -f='${Package}\n' |
-				awk '/^linux-.+-'"$(escape_regex "$release")"'$/') ||
-					error "Purging by dpkg failed; dpkg error $?." 3
-					# NOTE: some packages may have selection state "purge".
-			[[ $simulate ]] ||
-			 dpkg --purge $simulate \
-			  $(dpkg-query -W -f='${Package}\n' |
-			  awk '/^linux-.+-'"$(escape_regex "$(printf %s "$release" |
-			   cut -d- -f1,2)")"'$/') 2>/dev/null || true
-			# If purging linux-.+-<version> fails
-			# due to linux-.+-<version>-<flavour> being
-			# installed and not going to be purged, that is ok.
-		done
-		if [[ $simulate ]]; then
-			note "Not trying to purge non-flavour versioned kernel packages in \
+			$(dpkg-query -W -f='${Package}\n' |
+			awk '/^linux-.+-'"$(escape_regex "$release")"'$/') ||
+				error "Purging by dpkg failed; dpkg error $?." 3
+				# NOTE: some packages may have selection state "purge".
+		[[ $simulate ]] ||
+		 dpkg --purge \
+		  $(dpkg-query -W -f='${Package}\n' |
+		  awk '/^linux-.+-'"$(escape_regex "$(printf %s "$release" |
+		   cut -d- -f1,2)")"'$/') 2>/dev/null || true
+		# If purging linux-.+-<version> fails
+		# due to linux-.+-<version>-<flavour> being
+		# installed and not going to be purged, that is ok.
+	done
+	if [[ $simulate ]]; then
+		note "Did not try to purge non-flavour versioned kernel packages in \
 simulation mode."
-			note 'The second run of `apt-get --fix-broken install` will not be \
-executed in simulation mode, because it would be identical to the first run.'
-		else
-			printf %s 'Fixing dependency problem...'
-			apt-get -f install ||
-				error 'Could not fix the dependency problem.' 3
-		fi
 	fi
+}
+
+run_fix() {
+	[[ $simulate ]] || remove_extra_initrds
+	if [[ $(stat -f --format="%d" /var) -lt 10 ]]; then
+		# /var is about to run out of inodes. dpkg and apt-get
+		# may not be able to operate.
+		# (10 is an estimate of the number of needed free inodes.)
+		free_some_inodes
+	fi
+
+	while ! { note 'Fixing possible broken packages...'; \
+	 apt-get -f $simulate install; }; do
+		[[ $simulate ]] || remove_extra_initrds
+		printf '\n'
+		note "Could not fix broken packages. Lines above may give you clue \
+why this happened. Select action accordingly below:"
+		while true; do
+			printf '%s' "\
+1) Purge some kernel(s) to free space and then retry
+2) Run 'dpkg --configure -a' and retry. (Choose this, if recommended above.)
+3) Quit
+#? ";
+			read -r answer
+			case $answer in
+			 1) purge_manually ;;
+			 2) dpkg --configure -a $simulate \
+				|| error "'dpkg --configure -a' failed and returned $?" 3 ;;
+			 3) error 'Could not fix the problem.' 3 ;;
+			 *) printf '%s\n' 'Invalid selection'; continue ;;
+			esac
+			break # break while true
+		done
+
+		[[ $simulate ]] && {
+			note 'Cannot do more in simulation mode.'
+			exit 0
+		}
+	done
 
 	[[ $simulate ]] || note "Fixing finished successfully.
 HINT: You may run the command again without --fix option to possibly purge \
@@ -690,9 +710,8 @@ if [[ $choose ]]; then
 			 mark+='_'
 			printf %s "$ReleasesToKeep" | grep -Fxq -e "$release" &&
 			 status=off || status=on
-			printf '%s %s%s%s %s ' "$release" "$mark" "$cs" $(((0$(stat \
-			 --printf='+%b*%B' /boot/*-$release{,.*} 2>/dev/null))/$MB)) \
-			$status
+			printf '%s %s%s%s %s ' "$release" "$mark" "$cs" \
+			 $(get_release_size_boot $release) $status
 		fi
 	done)"
 	if [[ -z $Items ]]; then
