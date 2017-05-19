@@ -220,10 +220,25 @@ remove_extra_initrds() {
 	# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=814345
 	rm -rfv ${TMPDIR:-/var/tmp}/mkinitramfs-*
 
-	local old_dir=$(pwd)
+	local old_dir=$(pwd) release= response=
 	cd /boot
 	local initrd_releases=$(ls initrd.img-* |
 	 sed -r -e '/.*\.old-dkms$/d' -e '/.*\.bak$/d' -e 's/initrd\.img-(.*)/\1/')
+	local vmlinuz_releases=$(ls vmlinuz-* | sed -nr -e 's#\.efi\.signed$##' \
+	-e 's#^vmlinuz-(.*)#\1#p')
+	local extra_initrds=$(for release in \
+	$(get_set_complement "$initrd_releases" "$vmlinuz_releases"); do
+	 echo initrd.img-${release}
+	done)
+	[[ $extra_initrds ]] && {
+		[[ $yes ]] && note "Removing extra initrd.img files at /boot" || {
+			read -r -p "
+Remove the extra initrd.img file(s)
+$(printf '%s\n' $extra_initrds)
+at /boot? (Y/n) : " response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
+		rm -v $extra_initrds
+	}
+
 	local initrd_backup_releases=$(ls initrd.img-*.old-dkms initrd.img-*.bak 2>/dev/null |
 	 sed -r 's/initrd\.img-(.*)\.(old-dkms|bak)$/\1/')
 	local extra_backups=$(for release in \
@@ -239,6 +254,7 @@ $(printf '%s\n' $extra_backups)
 at /boot? (Y/n) : " response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
 		rm -v $extra_backups
 	}
+
 	cd "$old_dir"
 }
 
@@ -745,6 +761,7 @@ PkgsToPurge=$(dpkg-query -W -f='${Status} ${Package}\n' |
 if [[ $PkgsToPurge ]]; then
 
 	[[ $simulate ]] || {
+		remove_extra_initrds
 		cmd=$(fuser -v "$lockfile" 2>&1 | awk 'NR == 2{print $5}')
 		[[ $cmd ]] && {
 			note "Waiting for $cmd to finish..."
