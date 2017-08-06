@@ -3,8 +3,8 @@
 #  linux-purge - Linux kernel purging tool for Ubuntu Linux
 #
 #  Notable dependencies: apt, util-linux, whiptail.
-#  Will use dialog, if available, for interactive kernel selection,
-#  instead of whiptail, if environment variable USE_DIALOG is set.
+#  Will use dialog, if available, for interactive kernel selection, if
+#  whiptail is not explicitly requested by command line option.
 #
 #  Editing: Use tabulator width 4 for indentation.
 #
@@ -54,7 +54,7 @@ legend=1 # display legend in checklist by default
 optimize= # Do not optimize by default
 unknown_current= # Will be set non-null, if current kernel is unknown to dpkg
 error_called=
-use_dialog= # use whiptail instead of dialog by default
+interface=d
 
 # update-grub control variables
 update_grub_disabled=
@@ -105,8 +105,11 @@ run_update_grub() {
 show_help() {
 # Convert tabs by 4 spaces in the here document.
 printf "Usage (using short options):
-$program_name [-bcnosy] [{-kNUM [-a]} | -m]
-$program_name -f [-sn]
+
+$program_name [-bcnosy] [{-k NUM [-a]} | -m] [-i APP]
+
+$program_name -f [-sn] [-i APP]
+
 $program_name {-h | -v}
 
 Purge versioned kernel packages according to user's orders. Purging is
@@ -129,9 +132,7 @@ Options:
 					offer to remove them.
 	-c, --choose    Choose interactively which kernels to purge. Other
 					options determine which kernels are selected to
-					start with. If environment variable USE_DIALOG is
-					set, use dialog instead of whiptail as user
-					interface, if it is installed.
+					start with.
 	-f, --fix       Use this, if the program fails otherwise. Try to fix
 					broken dependencies, which are typical in case a
 					filesystem has no space left. If needed, try to purge
@@ -139,6 +140,15 @@ Options:
 					methods to be able to purge kernels from a system
 					with broken dependencies and/or lack of free inodes.
 	-h, --help      Display this help and exit.
+	-i APP, -iAPP, --interface APP, --interface=APP
+					Choose application used for generating user interface, when
+					selecting kernels; see option -c.
+
+					Supported values for APP:
+
+					d or dialog (default)
+
+					w or whiptail (fallback)
 	-k NUM, -kNUM, --keep NUM, --keep=NUM
 					Keep NUM latest kernels that have earlier version
 					and same flavour than each kernel a meta-kernel
@@ -335,7 +345,7 @@ $([[ $legend ]] && printf %s "$legend_text")"
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	local -r listheight=$((height-infolines-6))
 	[[ $listheight -lt 1 ]] && error "$h_error"
-	if [[ $use_dialog ]]; then
+	if [[ $interface = d ]]; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --stdout --separate-output \
 		--backtitle "$program_full_name" --cr-wrap --column-separator $cs \
@@ -366,7 +376,7 @@ a special way due to lack of free inodes.'
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	local -r listheight=$((height-infolines-6))
 	[[ $listheight -lt 1 ]] && error "$h_error"
-	if [[ $use_dialog ]]; then
+	if [[ $interface = d ]]; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=10 DIALOG_ERROR=11
 		dialog --title "$title" --backtitle "$program_full_name" \
 		--cr-wrap --no-items --stdout --menu "$infotext" $height $width \
@@ -546,8 +556,8 @@ more versioned kernel packages."
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null ||
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
-params=$(env -u GETOPT_COMPATIBLE getopt -o abcfhk:mnosvy -l auto-only,\
-clear-boot,choose,fix,help,keep:,manual,no-legend,optimize,simulate,version,\
+params=$(env -u GETOPT_COMPATIBLE getopt -o abcfhi:k:mnosvy -l auto-only,\
+clear-boot,choose,fix,help,interface:,keep:,manual,no-legend,optimize,simulate,version,\
 yes --name "[$program_name] ERROR" -- "$@") || {
 	err_code=$?
 	case $err_code in
@@ -575,6 +585,15 @@ while :; do
 		-h|--help)
 			show_help
 			exit
+			;;
+		-i|--interface)
+			case $2 in
+			 w|whiptail) interface=w ;;
+			 d|dialog) interface=d ;;
+			 *) error "'$2' is invalid interface ID." 1
+			esac
+			shift 2
+			continue
 			;;
 		-k|--keep)
 			keep=1
@@ -633,9 +652,11 @@ error "Must be run as root, if not in simulation mode. Hint:
 	[[ $update_grub ]] && chmod +x "$update_grub"
 }
 
-[[ ${USE_DIALOG+x} ]] && {
-	hash dialog 2>/dev/null && use_dialog=1 ||
-	 note 'Using whiptail, if needed, because dialog is not installed.'
+[[ $interface = d ]] && {
+	hash dialog 2>/dev/null || {
+		interface=w
+		note 'Using whiptail, if needed, because dialog is not installed.'
+	}
 }
 
 if [[ $fix ]]; then

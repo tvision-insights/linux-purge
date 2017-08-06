@@ -1,16 +1,22 @@
 _linux_purge() {
-	local cur prev words cword
+	local cur prev words cword wordlist
 	_init_completion || return
 
-	local opts="-a -b -c -f -h -k -m -n -o -s -v -y --auto-only --clear-boot \
---choose --fix --help --keep --manual --no-legend --optimize --simulate \
---version --yes"
+	local opts="--auto-only --clear-boot --choose --fix --help --interface \
+--keep --manual --no-legend --optimize --simulate --version --yes"
+
+# Short options are redundant and not that informative; uncomment if you want to
+# complete them anyway.
+#	opts+='-a -b -c -f -h -i -k -m -n -o -s -v -y'
+
 	case $prev in
 		-k|--keep)
 			[[ $cur =~ ^[0-9]+$ ]] && COMPREPLY=( "$cur" ) || COMPREPLY=( );
 			return 0 ;;
 	esac
+	[[ $prev =~ ^-([^-]*i|-interface)$ ]] && wordlist='dialog whiptail' \
+	|| wordlist='$opts'
 
-	COMPREPLY=( $( compgen -W '$opts' -- "$cur" ) )
+	COMPREPLY=( $( compgen -W "$wordlist" -- "$cur" ) )
 	return 0
 } && complete -F _linux_purge linux-purge
