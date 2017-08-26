@@ -578,6 +578,150 @@ more versioned kernel packages."
 	:
 }
 
+purge_normally() {
+	if status=$(dpkg-query -W -f='${Status}\n' "linux-image-$current" 2>/dev/null); then
+		grep -qE "^(install|hold) ok installed" <<<"$status" ||
+		error "Current kernel package linux-image-$current is not successfully \
+	installed or it is marked for removal." 3
+		# current kernel is successfully installed and wanted as such
+	else
+		warn "Current kernel $current is unknown to dpkg."
+		unknown_current=1
+	fi
+
+	# Create list of unsuccessfully/partially installed packages.
+	Pkgs=$(dpkg-query -W -f='${Package} ${Status}\n' 'linux-*' |
+	 awk '$3!="ok" || ($4!="installed" && $4!="not-installed" && $4!="config-files")
+	 ')
+	if [[ $Pkgs ]]; then
+		error "The following kernel packages have invalid state; each package name \
+	is followed by its state:
+	$Pkgs
+
+	(Refer to the documentation of dpkg for explanation of the package states.)
+
+	Hint: Run this command with --fix option.
+	Hint: If a package flag is 'reinst-required' (instead of 'ok') for some package, \
+	you may have to reinstall the package by 'apt-get install --reinstall'." 3
+	fi
+
+	# get list of succesfully installed releses with status install or hold
+	Releases=$(dpkg-query -W -f='${Status} ${Package}\n' |
+	sed -nr "s/^(install|hold) ok installed linux-image-([0-9]+\..+)/\2/p" |
+	sort -V)
+
+	[[ $clear_boot ]] && clear_boot
+
+	if [[ -z $keep ]]; then
+		[[ $manual ]] && {
+			# do not keep manually installed releases unless they are marked
+			# with "hold".
+			ManualReleases=$(get_manual_releases)
+			HoldReleases=$(get_hold_releases)
+			ReleasesToKeep=$(sort -Vu <(printf '%s\n%s\n%s' "$current" \
+			"$(get_set_complement "$Releases" "$ManualReleases")" "$HoldReleases"))
+		} ||
+		ReleasesToKeep=$Releases
+	else
+		ReleasesToKeep=
+		LatestReleases=$(get_latest_releases)
+		for release in $LatestReleases; do
+		[[ $ReleasesToKeep ]] && ReleasesToKeep+=$'\n'
+		ReleasesToKeep+=$(printf %s "$Releases" |
+		 grep -e '-'$(printf %s "$release" | cut -d- -f3-)'$' |
+		  grep -Fx -B $n -m 1 $release)
+		done
+
+		# Keep manually installed kernels, if wanted, and kernels marked for
+		# hold and the currently booted kernel (though it may be included already).
+		[[ $auto_only ]] && ManualReleases=$(get_manual_releases)
+		HoldReleases=$(get_hold_releases)
+		ReleasesToKeep=$(sort -Vu <(printf '%s\n%s\n%s\n%s' \
+		"$ReleasesToKeep" "$current" "$([[ $auto_only ]] && printf %s \
+		 "$ManualReleases")" "$HoldReleases"))
+	fi
+
+	if [[ $choose ]]; then
+		# Choose kernels interactively.
+
+		# create certain lists, if not done already
+		[[ ${LatestReleases+x} ]] || LatestReleases=$(get_latest_releases)
+		[[ ${ManualReleases+x} ]] || ManualReleases=$(get_manual_releases)
+		[[ ${HoldReleases+x} ]] || HoldReleases=$(get_hold_releases)
+
+		Items="$(for release in $Releases; do
+			if [[ $release != $current ]]; then
+				mark=
+				printf %s "$LatestReleases" | grep -Fxq -e "$release" &&
+				 mark+='+' || mark+='_'
+				printf %s "$HoldReleases" | grep -Fxq -e "$release" && mark+=H ||
+				 mark+='_'
+				printf %s "$ManualReleases" | grep -Fxq -e "$release" && mark+=M ||
+				 mark+='_'
+				printf %s "$ReleasesToKeep" | grep -Fxq -e "$release" &&
+				 status=off || status=on
+				printf '%s %s%s%s %s ' "$release" "$mark" "$cs" \
+				 $(get_release_size_boot $release) $status
+			fi
+		done)"
+		if [[ -z $Items ]]; then
+			note "No kernels to choose from. Just clear the junk..."
+			ReleasesToPurge=
+		else
+			ReleasesToPurge=$(getReleasesToPurge "$Items") || { err_code=$?;
+				[[ $err_code -eq 1 ]] && exit 0 || [[ $err_code -eq 255 ]] &&
+				 error 'Whiptail error, or user pressed escape' 255 ||
+				  error 'Dialog error' 4; }
+		fi
+		if [[ $ReleasesToPurge ]]; then
+			ReleasesToKeep=$(get_set_complement "$Releases" "$ReleasesToPurge")
+		else
+			ReleasesToKeep="$Releases"
+		fi
+	fi
+
+	KeepRegex=
+	for release in $ReleasesToKeep; do
+		[[ $KeepRegex ]] && KeepRegex+='|'
+		KeepRegex+=$(escape_regex "$release" |
+		 sed -nr 's/^([^-]+-[^-]+)(-.*)/\1(\2)?/p')
+	done
+
+	PkgsToPurge=$(dpkg-query -W -f='${Status} ${Package}\n' |
+	 awk '/^[^ ]+ ok [^n][^ ]+ linux-.+-[0-9]+\.[0-9]+\./{
+	  if ($4!~/-('"${KeepRegex}"')$/){print $4}
+	 }')
+
+	if [[ $PkgsToPurge ]]; then
+
+		[[ $simulate ]] || {
+			remove_extra_initrds
+			cmd=$(fuser -v "$lockfile" 2>&1 | awk 'NR == 2{print $5}')
+			[[ $cmd ]] && {
+				note "Waiting for $cmd to finish..."
+				while fuser "$lockfile" &>/dev/null; do sleep 1; done
+			}
+
+			# disable update-grub; restore after purging has finished.
+			# This will speed up purging somewhat.
+			[[ $optimize && $update_grub ]] && chmod -x "$update_grub" && {
+			  note "Made '$update_grub' non-executable temporarily to speed up purging."
+			  update_grub_disabled=1
+			}
+		}
+		apt-get $simulate $yes purge $PkgsToPurge || {
+			err_code=$?
+			[[ $update_grub_disabled ]] && run_update_grub
+			error "Purging by apt-get failed; apt-get error $err_code.
+	Hint: try running the command with --fix option." 3
+		}
+		[[ $update_grub_disabled ]] && run_update_grub
+	fi
+
+	[[ $simulate ]] || remove_extra_initrds
+}
+
+
 # Main program
 
 # Handle command line options
@@ -690,149 +834,6 @@ error "Must be run as root, if not in simulation mode. Hint:
 
 if [[ $fix ]]; then
 	run_fix
-	exit
-fi
-
-# normal purging mode
-
-if status=$(dpkg-query -W -f='${Status}\n' "linux-image-$current" 2>/dev/null); then
-	grep -qE "^(install|hold) ok installed" <<<"$status" ||
-	error "Current kernel package linux-image-$current is not successfully \
-installed or it is marked for removal." 3
-	# current kernel is successfully installed and wanted as such
 else
-	warn "Current kernel $current is unknown to dpkg."
-	unknown_current=1
+	purge_normally
 fi
-
-# Create list of unsuccessfully/partially installed packages.
-Pkgs=$(dpkg-query -W -f='${Package} ${Status}\n' 'linux-*' |
- awk '$3!="ok" || ($4!="installed" && $4!="not-installed" && $4!="config-files")
- ')
-if [[ $Pkgs ]]; then
-	error "The following kernel packages have invalid state; each package name \
-is followed by its state:
-$Pkgs
-
-(Refer to the documentation of dpkg for explanation of the package states.)
-
-Hint: Run this command with --fix option.
-Hint: If a package flag is 'reinst-required' (instead of 'ok') for some package, \
-you may have to reinstall the package by 'apt-get install --reinstall'." 3
-fi
-
-# get list of succesfully installed releses with status install or hold
-Releases=$(dpkg-query -W -f='${Status} ${Package}\n' |
-sed -nr "s/^(install|hold) ok installed linux-image-([0-9]+\..+)/\2/p" |
-sort -V)
-
-[[ $clear_boot ]] && clear_boot
-
-if [[ -z $keep ]]; then
-	[[ $manual ]] && {
-		# do not keep manually installed releases unless they are marked
-		# with "hold".
-		ManualReleases=$(get_manual_releases)
-		HoldReleases=$(get_hold_releases)
-		ReleasesToKeep=$(sort -Vu <(printf '%s\n%s\n%s' "$current" \
-		"$(get_set_complement "$Releases" "$ManualReleases")" "$HoldReleases"))
-	} ||
-	ReleasesToKeep=$Releases
-else
-	ReleasesToKeep=
-	LatestReleases=$(get_latest_releases)
-	for release in $LatestReleases; do
-	[[ $ReleasesToKeep ]] && ReleasesToKeep+=$'\n'
-	ReleasesToKeep+=$(printf %s "$Releases" |
-	 grep -e '-'$(printf %s "$release" | cut -d- -f3-)'$' |
-	  grep -Fx -B $n -m 1 $release)
-	done
-
-	# Keep manually installed kernels, if wanted, and kernels marked for
-	# hold and the currently booted kernel (though it may be included already).
-	[[ $auto_only ]] && ManualReleases=$(get_manual_releases)
-	HoldReleases=$(get_hold_releases)
-	ReleasesToKeep=$(sort -Vu <(printf '%s\n%s\n%s\n%s' \
-	"$ReleasesToKeep" "$current" "$([[ $auto_only ]] && printf %s \
-	 "$ManualReleases")" "$HoldReleases"))
-fi
-
-if [[ $choose ]]; then
-	# Choose kernels interactively.
-
-	# create certain lists, if not done already
-	[[ ${LatestReleases+x} ]] || LatestReleases=$(get_latest_releases)
-	[[ ${ManualReleases+x} ]] || ManualReleases=$(get_manual_releases)
-	[[ ${HoldReleases+x} ]] || HoldReleases=$(get_hold_releases)
-
-	Items="$(for release in $Releases; do
-		if [[ $release != $current ]]; then
-			mark=
-			printf %s "$LatestReleases" | grep -Fxq -e "$release" &&
-			 mark+='+' || mark+='_'
-			printf %s "$HoldReleases" | grep -Fxq -e "$release" && mark+=H ||
-			 mark+='_'
-			printf %s "$ManualReleases" | grep -Fxq -e "$release" && mark+=M ||
-			 mark+='_'
-			printf %s "$ReleasesToKeep" | grep -Fxq -e "$release" &&
-			 status=off || status=on
-			printf '%s %s%s%s %s ' "$release" "$mark" "$cs" \
-			 $(get_release_size_boot $release) $status
-		fi
-	done)"
-	if [[ -z $Items ]]; then
-		note "No kernels to choose from. Just clear the junk..."
-		ReleasesToPurge=
-	else
-		ReleasesToPurge=$(getReleasesToPurge "$Items") || { err_code=$?;
-			[[ $err_code -eq 1 ]] && exit 0 || [[ $err_code -eq 255 ]] &&
-			 error 'Whiptail error, or user pressed escape' 255 ||
-			  error 'Dialog error' 4; }
-	fi
-	if [[ $ReleasesToPurge ]]; then
-		ReleasesToKeep=$(get_set_complement "$Releases" "$ReleasesToPurge")
-	else
-		ReleasesToKeep="$Releases"
-	fi
-fi
-
-KeepRegex=
-for release in $ReleasesToKeep; do
-	[[ $KeepRegex ]] && KeepRegex+='|'
-	KeepRegex+=$(escape_regex "$release" |
-	 sed -nr 's/^([^-]+-[^-]+)(-.*)/\1(\2)?/p')
-done
-
-PkgsToPurge=$(dpkg-query -W -f='${Status} ${Package}\n' |
- awk '/^[^ ]+ ok [^n][^ ]+ linux-.+-[0-9]+\.[0-9]+\./{
-  if ($4!~/-('"${KeepRegex}"')$/){print $4}
- }')
-
-if [[ $PkgsToPurge ]]; then
-
-	[[ $simulate ]] || {
-		remove_extra_initrds
-		cmd=$(fuser -v "$lockfile" 2>&1 | awk 'NR == 2{print $5}')
-		[[ $cmd ]] && {
-			note "Waiting for $cmd to finish..."
-			while fuser "$lockfile" &>/dev/null; do sleep 1; done
-		}
-
-		# disable update-grub; restore after purging has finished.
-		# This will speed up purging somewhat.
-		[[ $optimize && $update_grub ]] && chmod -x "$update_grub" && {
-		  note "Made '$update_grub' non-executable temporarily to speed up purging."
-		  update_grub_disabled=1
-		}
-	}
-	apt-get $simulate $yes purge $PkgsToPurge || {
-		err_code=$?
-		[[ $update_grub_disabled ]] && run_update_grub
-		error "Purging by apt-get failed; apt-get error $err_code.
-Hint: try running the command with --fix option." 3
-	}
-	[[ $update_grub_disabled ]] && run_update_grub
-fi
-
-[[ $simulate ]] || remove_extra_initrds
-:
