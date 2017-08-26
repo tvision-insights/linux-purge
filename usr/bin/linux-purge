@@ -837,3 +837,5 @@ if [[ $fix ]]; then
 else
 	purge_normally
 fi
+note "If you find this software useful, please donate. You can find the \
+details at the Launchpad page: <https://launchpad.net/linux-purge>"
