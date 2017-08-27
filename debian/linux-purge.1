@@ -36,6 +36,10 @@ Choose interactively which kernels to purge. Other
 options determine which kernels are selected to
 start with.
 .TP
+\fB\-d\fR, \fB\-\-debug\fR
+Store the command trace and some other debug information
+in a file whose name is given in the output.
+.TP
 \fB\-f\fR, \fB\-\-fix\fR
 Use this, if the program fails otherwise. Try to fix
 broken dependencies, which are typical in case a
@@ -97,6 +101,8 @@ other integer:
 Command failed for some other reason.
 .SH "REPORTING BUGS"
 Report bugs at: <https://bugs.launchpad.net/linux\-purge/+filebug>
+.br
+Use \fB\-\-debug\fR option and attach the generated file.
 .br
 Launchpad home page: <https://launchpad.net/linux\-purge>
 .br

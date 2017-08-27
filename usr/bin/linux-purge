@@ -46,6 +46,8 @@ keep= # explicit keep option not detected
 auto_only= # Do not restrict purging to automatically installed packages.
 clear_boot= # Do not clear system from files unknown to dpkg.
 choose= # Do not let user choose kernels to purge interactively.
+debug= # not debug mode
+debug_file=
 fix= # do not fix
 simulate= # no simulation
 yes= # interactive mode
@@ -89,6 +91,8 @@ finnish() {
 	err=$?
 	[[ $error_called ]] && err=0
 	restore_update_grub
+	[[ $debug_file ]] && note "The debug information is saved in
+${debug_file}"
 	[[ $err -eq 0 ]] || error "Aborting due to an unknown error ($err)." 3
 }
 
@@ -133,6 +137,8 @@ Options:
 	-c, --choose    Choose interactively which kernels to purge. Other
 					options determine which kernels are selected to
 					start with.
+	-d, --debug		Store the command trace and some other debug information
+					in a file whose name is given in the output.
 	-f, --fix       Use this, if the program fails otherwise. Try to fix
 					broken dependencies, which are typical in case a
 					filesystem has no space left. If needed, try to purge
@@ -171,6 +177,7 @@ Exit Status:
 	other integer:  Command failed for some other reason.
 
 Report bugs at: <https://bugs.launchpad.net/linux-purge/+filebug>
+Use --debug option and attach the generated file.
 Launchpad home page: <https://launchpad.net/linux-purge>
 General help using GNU software: <http://www.gnu.org/gethelp/>\n" |
 sed 's/\t/    /g'
@@ -271,13 +278,11 @@ remove_extra_initrds() {
 	done)
 	[[ $extra_initrds ]] && {
 		[[ $yes ]] && note "Removing extra initrd.img files at /boot" || {
-			read -r -p "
-Remove the extra initrd.img file(s)
-$(printf '%s\n' $extra_initrds)
-at /boot? (Y/n) : " response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
+			printf '\nRemove the extra initrd.img file(s)
+%s\nat /boot? [Y/n] : ' "$extra_initrds"
+			read -r response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
 		rm -v $extra_initrds
 	}
-
 	local initrd_backup_releases=$(ls initrd.img-*.old-dkms initrd.img-*.bak 2>/dev/null |
 	 sed -r 's/initrd\.img-(.*)\.(old-dkms|bak)$/\1/')
 	local extra_backups=$(for release in \
@@ -287,10 +292,9 @@ at /boot? (Y/n) : " response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
 
 	[[ $extra_backups ]] && {
 		[[ $yes ]] && note "Removing extra initrd.img backups at /boot" || {
-			read -r -p "
-Remove the extra initrd.img backup file(s)
-$(printf '%s\n' $extra_backups)
-at /boot? (Y/n) : " response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
+			printf '\nRemove the extra initrd.img backup file(s)
+%s\nat /boot? [Y/n] : ' "$extra_backups"
+			read -r response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
 		rm -v $extra_backups
 	}
 
@@ -310,11 +314,10 @@ clear_boot() {
 	 "$ReleasesKnownToDpkg")
 	[[ $UnknownReleases ]] && {
 		[[ $yes ]] && note "Removing files unknown to package management:" || {
-			read -r -p "There are some kernel files unknown to package \
-management system in /boot:
-$(ls /boot| grep -f <(printf %s "$UnknownReleases"))
-Continue to removing the files and also respective files elsewhere in system? \
-(Y/n) : " response &&
+			printf 'There are some kernel files unknown to package management system in /boot:
+%s\nContinue to removing the files and also respective files elsewhere in system? [Y/n] : ' \
+"$(ls /boot| grep -f <(printf %s "$UnknownReleases"))"
+			read -r response &&
 			[[ ${response,,} =~ ^(y|$) ]] ;} && {
 				# restrict removing to these directories:
 				local release version flavour regex
@@ -729,9 +732,9 @@ purge_normally() {
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null ||
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
-params=$(env -u GETOPT_COMPATIBLE getopt -o abcfhi:k:mnosvy -l auto-only,\
-clear-boot,choose,fix,help,interface:,keep:,manual,no-legend,optimize,simulate,version,\
-yes --name "[$program_name] ERROR" -- "$@") || {
+params=$(env -u GETOPT_COMPATIBLE getopt -o abcdfhi:k:mnosvy -l auto-only,\
+clear-boot,choose,debug,fix,help,interface:,keep:,manual,no-legend,optimize,\
+simulate,version,yes --name "[$program_name] ERROR" -- "$@") || {
 	err_code=$?
 	case $err_code in
 		1) error_called=1; exit 1 ;;
@@ -740,7 +743,6 @@ yes --name "[$program_name] ERROR" -- "$@") || {
 }
 
 eval set -- "$params"
-unset params
 while :; do
 	case ${1-} in
 		-a|--auto-only)
@@ -751,6 +753,9 @@ while :; do
 			;;
 		-c|--choose)
 			choose=1
+			;;
+		-d|--debug)
+			debug=1
 			;;
 		 -f|--fix)
 			fix=1
@@ -832,10 +837,31 @@ error "Must be run as root, if not in simulation mode. Hint:
 	}
 }
 
+[[ $debug ]] && {
+	debug_file=$(mktemp /tmp/linux-purge.debug_XXX)
+	{
+		printf '## linux-purge version: %s\n' $program_version
+		printf '## options: %s\n' "$params"
+		printf '## OS: %s\n' "$(lsb_release -d | cut -d$'\t' -f2)"
+		printf '## awk version:\n'
+		awk -W version
+		printf '## linux packages:\n'
+		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' linux-'*'
+		printf '\n## trace and output:\n'
+	} >$debug_file
+	chmod +r $debug_file
+	exec 2>>$debug_file
+	set -x
+}
+
+{
 if [[ $fix ]]; then
 	run_fix
 else
 	purge_normally
 fi
-note "If you find this software useful, please donate. You can find the \
-details at the Launchpad page: <https://launchpad.net/linux-purge>"
+}> >(tee --append $debug_file)
+
+set +x
+[[ $debug ]] || note "If you find this software useful, please donate. You can \
+find the details at the Launchpad page: <https://launchpad.net/linux-purge>"
