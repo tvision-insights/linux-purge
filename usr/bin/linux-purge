@@ -32,8 +32,8 @@ readonly program_name='linux-purge' \
 program_full_name='Linux Purge for Ubuntu' \
 program_version='1.0' \
 MB=1000000 \
-width=60 \
-w_error='Terminal screen not wide enough. Minimum is $width columns.' \
+width=60
+readonly w_error='Terminal screen not wide enough. Minimum is '$width' columns.' \
 h_error='Not enough lines in terminal screen.' \
 lockfile='/var/lib/dpkg/lock' \
 current=$(uname -r) \
@@ -360,6 +360,7 @@ $rdirs.*$regex" || note "Answer y to remove the files."
 # Exits with 0 in success, 1 in case of cancel, other value in case of possible
 # error.
 getReleasesToPurge() {
+	eval $(resize)
 	local -r title='Choose Which Kernels to Purge'
 	local -r height=$(($(tput lines)-6))
 	[[ $(tput cols) -lt $width ]] && error "$w_error"
@@ -400,6 +401,7 @@ $([[ $legend ]] && printf %s "$legend_text")"
 # Exits with 0 in success, 1 in case of cancel, other value in case of possible
 # error.
 getVersionToPurge() {
+	eval $(resize)
 	local -r height=$(($(tput lines)-6))
 	[[ $(tput cols) -lt $width ]] && error "$w_error"
 	local -r title='Choose Which Linux Kernel to Purge'
@@ -850,7 +852,6 @@ error "Must be run as root, if not in simulation mode. Hint:
 		printf '\n## trace and output:\n'
 	} >$debug_file
 	chmod +r $debug_file
-	exec 2>>$debug_file
 	set -x
 }
 
@@ -860,7 +861,7 @@ if [[ $fix ]]; then
 else
 	purge_normally
 fi
-}> >(tee --append $debug_file)
+}> >(tee --append $debug_file) 2> >(tee --append $debug_file >&2)
 
 set +x
 [[ $debug ]] || note "If you find this software useful, please donate. You can \
