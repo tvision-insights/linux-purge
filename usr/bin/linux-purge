@@ -110,9 +110,9 @@ show_help() {
 # Convert tabs by 4 spaces in the here document.
 printf "Usage (using short options):
 
-$program_name [-bcnosy] [{-k NUM [-a]} | -m] [-i APP]
+$program_name [-bcdnosy] [{-k NUM [-a]} | -m] [-i APP]
 
-$program_name -f [-sn] [-i APP]
+$program_name -f [-dsn] [-i APP]
 
 $program_name {-h | -v}
 
