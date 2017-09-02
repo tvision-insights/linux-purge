@@ -324,7 +324,7 @@ clear_boot() {
 				local -r rdirs='^/(boot|lib|usr|var)/'
 				for release in $UnknownReleases; do
 					version=$(printf %s "$release" | cut -d- -f1,2)
-					flavour=$(printf %s "$release" | cut -d- -f3-)
+					flavour=$(printf %s "$release" | cut -s -d- -f3-)
 					# check, if also files without the flavour part can be
 					# removed
 					dpkg-query -W -f='${Package}\n' |
@@ -485,7 +485,7 @@ purge_manually() {
 	for release in $(get_set_complement "$InstalledReleases" \
 	"$(printf '%s\n%s' "$(get_latest_releases)" "$current")"); do
 		version=$(printf %s "$release" | cut -d- -f1,2)
-		flavour=$(printf %s "$release" | cut -d- -f3-)
+		flavour=$(printf %s "$release" | cut -s -d- -f3-)
 		[[ $(dpkg-query -W -f='${Status} ${Package}\n' |
 		awk '$4 ~ /linux-.+-'"$(escape_regex "$version")"'(-'"$(\
 		 escape_regex "$flavour")"')?$/{if($2!="ok"){e=1;exit}
@@ -631,10 +631,10 @@ purge_normally() {
 		ReleasesToKeep=
 		LatestReleases=$(get_latest_releases)
 		for release in $LatestReleases; do
-		[[ $ReleasesToKeep ]] && ReleasesToKeep+=$'\n'
-		ReleasesToKeep+=$(printf %s "$Releases" |
-		 grep -e '-'$(printf %s "$release" | cut -d- -f3-)'$' |
-		  grep -Fx -B $n -m 1 $release)
+			[[ $ReleasesToKeep ]] && ReleasesToKeep+=$'\n'
+			ReleasesToKeep+=$(printf %s "$Releases" |
+			grep -e '-'$(printf %s "$release" | cut -s -d- -f3-)'$' |
+			 grep -Fx -B $n -m 1 $release)
 		done
 
 		# Keep manually installed kernels, if wanted, and kernels marked for
