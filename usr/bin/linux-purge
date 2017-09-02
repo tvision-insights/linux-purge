@@ -715,6 +715,7 @@ purge_normally() {
 		}
 		apt-get $simulate $yes purge $PkgsToPurge || {
 			err_code=$?
+			[[ err_code -eq 1 ]] && exit 0 # User aborted
 			[[ $update_grub_disabled ]] && run_update_grub
 			error "Purging by apt-get failed; apt-get error $err_code.
 	Hint: try running the command with --fix option." 3
