@@ -308,7 +308,7 @@ clear_boot() {
 	sed -nr "s/linux-image-([0-9]+\..+)/\1/p")
 	local ReleasesOnBoot=$(ls /boot/vmlinuz-* |
 	 sed -nr -e 's#\.efi\.signed$##' -e 's#/boot/vmlinuz-([0-9]+\..+)#\1#p' |
-	  grep -vFx "$current")
+	  { grep -vFx "$current" || [[ $? -eq 1 ]]; })
 	[[ $unknown_current ]] && note 'Not going to remove current kernel.'
 	local UnknownReleases=$(get_set_complement "$ReleasesOnBoot" \
 	 "$ReleasesKnownToDpkg")
@@ -316,7 +316,7 @@ clear_boot() {
 		[[ $yes ]] && note "Removing files unknown to package management:" || {
 			printf 'There are some kernel files unknown to package management system in /boot:
 %s\nContinue to removing the files and also respective files elsewhere in system? [Y/n] : ' \
-"$(ls /boot| grep -f <(printf %s "$UnknownReleases"))"
+"$(ls /boot | grep -f <(printf %s "$UnknownReleases"))"
 			read -r response &&
 			[[ ${response,,} =~ ^(y|$) ]] ;} && {
 				# restrict removing to these directories:
@@ -693,8 +693,8 @@ purge_normally() {
 	done
 
 	PkgsToPurge=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
-	 awk '/^.[^n]  linux-.+-[0-9]+\.[0-9]+\./{print $2}' |
-	  grep -Evf <(printf '%s' "$KeepRegex"))
+	 awk '/^.[^n]  linux-.+-[0-9]+\.[0-9]+\./{print $2}' | {
+	  grep -Evf <(printf '%s' "$KeepRegex") || [[ $? -eq 1 ]]; })
 
 	if [[ $PkgsToPurge ]]; then
 
