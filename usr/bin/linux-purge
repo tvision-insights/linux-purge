@@ -849,7 +849,7 @@ error "Must be run as root, if not in simulation mode. Hint:
 		printf '## linux packages:\n'
 		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' linux-'*'
 		printf '\n## trace and output:\n'
-	} >$debug_file
+	} >$debug_file 2>&1
 	chmod +r $debug_file
 	set -x
 }
