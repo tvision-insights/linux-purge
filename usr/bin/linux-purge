@@ -589,7 +589,7 @@ purge_normally() {
 	if status=$(dpkg-query -W -f='${Status}\n' "linux-image-$current" 2>/dev/null); then
 		grep -qE "^(install|hold) ok installed" <<<"$status" ||
 		error "Current kernel package linux-image-$current is not successfully \
-	installed or it is marked for removal." 3
+installed or it is marked for removal." 3
 		# current kernel is successfully installed and wanted as such
 	else
 		warn "Current kernel $current is unknown to dpkg."
@@ -602,14 +602,14 @@ purge_normally() {
 	 ')
 	if [[ $Pkgs ]]; then
 		error "The following kernel packages have invalid state; each package name \
-	is followed by its state:
-	$Pkgs
+is followed by its state:
+$Pkgs
 
-	(Refer to the documentation of dpkg for explanation of the package states.)
+(Refer to the documentation of dpkg for explanation of the package states.)
 
-	Hint: Run this command with --fix option.
-	Hint: If a package flag is 'reinst-required' (instead of 'ok') for some package, \
-	you may have to reinstall the package by 'apt-get install --reinstall'." 3
+Hint: Run this command with --fix option.
+Hint: If a package flag is 'reinst-required' (instead of 'ok') for some package, \
+you may have to reinstall the package by 'apt-get install --reinstall'." 3
 	fi
 
 	# get list of succesfully installed releses with status install or hold
@@ -720,7 +720,7 @@ purge_normally() {
 			[[ err_code -eq 1 ]] && exit 0 # User aborted
 			[[ $update_grub_disabled ]] && run_update_grub
 			error "Purging by apt-get failed; apt-get error $err_code.
-	Hint: try running the command with --fix option." 3
+Hint: try running the command with --fix option." 3
 		}
 		[[ $update_grub_disabled ]] && run_update_grub
 	fi
