@@ -134,18 +134,18 @@ Options:
 					Check /boot for kernels unknown to the package
 					management system, and if such files are found,
 					offer to remove them.
-	-c, --choose    Choose interactively which kernels to purge. Other
+	-c, --choose	Choose interactively which kernels to purge. Other
 					options determine which kernels are selected to
 					start with.
-	-d, --debug		Store the command trace and some other debug information
+	-d, --debug 	Store the command trace and some other debug information
 					in a file whose name is given in the output.
-	-f, --fix       Use this, if the program fails otherwise. Try to fix
+	-f, --fix   	Use this, if the program fails otherwise. Try to fix
 					broken dependencies, which are typical in case a
 					filesystem has no space left. If needed, try to purge
 					given kernel(s) interactively by using different
 					methods to be able to purge kernels from a system
 					with broken dependencies and/or lack of free inodes.
-	-h, --help      Display this help and exit.
+	-h, --help  	Display this help and exit.
 	-i APP, -iAPP, --interface APP, --interface=APP
 					Choose application used for generating user interface, when
 					selecting kernels; see option -c.
@@ -168,7 +168,7 @@ Options:
 					simulation is not complete since some actions may
 					depend on others being done for real beforehand.
 	-v, --version   Print version.
-	-y, --yes       Purge without user confirmation.
+	-y, --yes   	Purge without user confirmation.
 
 Exit Status:
 	0:  Command finished successfully.
