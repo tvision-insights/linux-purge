@@ -253,8 +253,8 @@ get_manual_releases() {
 }
 
 get_hold_releases() {
-	dpkg-query -W -f='${Status} ${Package}\n' |
-	 sed -nr 's/hold ok installed linux-image-(unsigned-)?([0-9]+\..+)/\2/p'
+	dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
+	 sed -nr 's/^hi  linux-image-(unsigned-)?([0-9]+\..+)/\2/p'
 }
 
 get_set_complement() {
@@ -432,22 +432,20 @@ free_some_inodes() {
 	 error "Too few inodes on the filesystem mounted at $varmp." 3
 	# Try freeing some inodes by removing some files from /usr/src.
 	# Prompt for one kernel to remove, if there are many to choose from.
-	local HeaderVersions=$(dpkg-query -W -f='${Status} ${Package}\n' |
-	sed -rn "s/^[^ ]+ ok installed linux-headers-([0-9.]+(-[^-]+)?)$/\1/p" |
-	 sort -V)
+	local HeaderVersions=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
+	sed -rn "s/^.i  linux-headers-([0-9.]+(-[^-]+)?)$/\1/p" | sort -V)
 	HeaderVersions=$(get_set_complement "$HeaderVersions" \
 	"$(printf '%s\n%s\n%s' \
 	 "$(get_latest_releases | cut -d'-' -f1,2)" \
 	 "$(printf %s "$current" | cut -d'-' -f1,2)" \
-	 "$(dpkg-query -W -f='${Status} ${Package}\n' |
-	   sed -nr 's/hold ok installed linux-image-([0-9.]+(-[^-]+)?).*/\1/p')")")
+	 "$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
+	   sed -nr 's/^hi  linux-image-([0-9.]+(-[^-]+)?).*/\1/p')")")
 	# Restrict to versions that have related linux packages "ok".
 	local version okVersions=
 	for version in $HeaderVersions; do
-		[[ $(dpkg-query -W -f='${Status} ${Package}\n' |
-		awk '$4 ~ /linux-.+-'"$(escape_regex "$version")"'(-.*)?$/{
-			if($2!="ok"){e=1;exit}
-		}END{print e}') ]] || okVersions+="$version "
+		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
+		 grep -qE '^..[^ ] linux-.+-'"$(escape_regex $version)"'(-.*)?$' ||
+		  okVersions+="$version "
 	done
 	okVersions=${okVersions%% }
 	[[ $okVersions ]] || error "No suitable version to purge." 3
@@ -464,9 +462,8 @@ free_some_inodes() {
 	[[ $simulate ]] || rm -fv /boot/initrd.img-"${version}"-*
 	note "Purging the kernel by dpkg ..."
 	dpkg --purge --abort-after=1 $simulate \
-	$(dpkg-query -W -f='${Status} ${Package}\n' |
-	 awk '/^[^ ]+ ok installed linux-.+-'"$(escape_regex "${version}")"\
-'(-.*)?$/{print $4}') || {
+	$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
+	 awk '/^.i  linux-.+-'"$(escape_regex ${version})"'(-.*)?$/{print $2}') || {
 		error "Purging by dpkg failed; dpkg error $?." 3
 		# NOTE: some packages may have selection state
 		# "purge" after this.
@@ -477,17 +474,16 @@ free_some_inodes() {
 purge_manually() {
 	# Restrict to releases that have related linux packages "ok".
 	local release version flavour okReleases=
-	InstalledReleases=$(dpkg-query -W -f='${Status} ${Package}\n' \
-	| sed -nr "s/^[^ ]+ ok installed linux-image-(unsigned-)?([0-9]+\..+)/\2/p" \
+	InstalledReleases=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' \
+	| sed -nr "s/^.i  linux-image-(unsigned-)?([0-9]+\..+)/\2/p" \
 	| sort -V)
 	for release in $(get_set_complement "$InstalledReleases" \
 	"$(printf '%s\n%s' "$(get_latest_releases)" "$current")"); do
 		version=$(printf %s "$release" | cut -d- -f1,2)
 		flavour=$(printf %s "$release" | cut -s -d- -f3-)
-		[[ $(dpkg-query -W -f='${Status} ${Package}\n' |
-		awk '$4 ~ /linux-.+-'"$(escape_regex "$version")"'(-'"$(\
-		 escape_regex "$flavour")"')?$/{if($2!="ok"){e=1;exit}
-		}END{print e}') ]] || okReleases+="$release "
+		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' | grep -qE \
+		 '^..[^ ] linux-.+-'"$(escape_regex $version)"'(-'"$(escape_regex $flavour)"')?$' \
+		  || okReleases+="$release "
 	done
 
 	okReleases=${okReleases%% }
@@ -519,14 +515,14 @@ purge_manually() {
 		note "Purging the kernel by dpkg ..."
 		dpkg --purge --abort-after=1 $simulate \
 			$(dpkg-query -W -f='${Package}\n' |
-			awk '/^linux-.+-'"$(escape_regex "$release")"'$/') ||
+			awk '/^linux-.+-'"$(escape_regex $release)"'$/') ||
 				error "Purging by dpkg failed; dpkg error $?." 3
 				# NOTE: some packages may have selection state "purge".
 		[[ $simulate ]] ||
 		 dpkg --purge \
 		  $(dpkg-query -W -f='${Package}\n' |
-		  awk '/^linux-.+-'"$(escape_regex "$(printf %s "$release" |
-		   cut -d- -f1,2)")"'$/') 2>/dev/null || true
+		  awk '/^linux-.+-'"$(escape_regex $(printf %s $release |
+		   cut -d- -f1,2))"'$/') 2>/dev/null || true
 		# If purging linux-.+-<version> fails
 		# due to linux-.+-<version>-<flavour> being
 		# installed and not going to be purged, that is ok.
@@ -606,10 +602,9 @@ Hint: If a package flag is 'reinst-required' (instead of 'ok') for some package,
 you may have to reinstall the package by 'apt-get install --reinstall'." 3
 	fi
 
-	# get list of succesfully installed releses with status install or hold
-	Releases=$(dpkg-query -W -f='${Status} ${Package}\n' |
-	sed -nr "s/^(install|hold) ok installed linux-image-(unsigned-)?([0-9]+\..+)/\3/p" |
-	sort -V)
+	# get list of succesfully installed wanted releses
+	Releases=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
+	 sed -nr "s/^[ih]i  linux-image-(unsigned-)?([0-9]+\..+)/\2/p" | sort -V)
 
 	[[ $clear_boot ]] && clear_boot
 
