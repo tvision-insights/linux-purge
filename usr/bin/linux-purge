@@ -111,7 +111,7 @@ printf "Usage (using short options):
 
 $program_name [-bcdnosy] [{-k NUM [-a]} | -m] [-i APP]
 
-$program_name -f [-dsn] [-i APP]
+$program_name -f [-bdns] [-i APP]
 
 $program_name {-h | -v}
 
@@ -527,6 +527,7 @@ simulation mode."
 
 run_fix() {
 	[[ $simulate ]] || remove_extra_initrds
+	[[ $clear_boot ]] && clear_boot
 	if [[ $(stat -f --format="%d" /var) -lt 10 ]]; then
 		# /var is about to run out of inodes. dpkg and apt-get
 		# may not be able to operate.
