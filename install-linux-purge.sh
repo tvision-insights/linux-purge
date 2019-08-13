@@ -19,6 +19,7 @@ mandir=/usr/local/man/man8
 mkdir -p "$mandir"
 cd "$mandir"
 wget -N https://git.launchpad.net/linux-purge/plain/debian/linux-purge.8
+gzip -f linux-purge.8
 mandb -q
 
 # install Bash completion
