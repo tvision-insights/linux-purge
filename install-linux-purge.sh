@@ -22,12 +22,16 @@ wget -N https://git.launchpad.net/linux-purge/plain/debian/linux-purge.8
 mandb -q
 
 # install Bash completion
-# use output of `pkg-config --variable=completionsdir bash-completion` 
-# for completions directory, if possible
-compdir=/usr/share/bash-completion/completions 
-# else use output of `pkg-config --variable=compatdir bash-completion`
-[[ -d $compdir ]] || compdir=/etc/bash_completion.d
+compdir=/usr/share/bash-completion/completions # for Ubuntu 16.04 and older
+use_local=
+dpkg --compare-versions $(dpkg-query -W -f'${Version}\n' bash-completion) ge '1:2.2' \
+&& {
+	use_local=1
+	rm -f "$compdir"/linux-purge # delete possible old file
+	compdir=/usr/local/share/bash-completion/completions
+	mkdir -p "$compdir"
+}
 cd "$compdir"
-wget -N https://git.launchpad.net/linux-purge/plain/debian/linux-purge.bash-completion
-mv -f linux-purge.bash-completion linux-purge
+wget -N https://git.launchpad.net/linux-purge/plain/debian/linux-purge.bash
+[[ $use_local ]] || mv -f linux-purge.bash linux-purge
 
