@@ -113,7 +113,7 @@ $program_name [-bcdnosy] [{-k NUM [-a]} | -m] [-i APP]
 
 $program_name -f [-bdns] [-i APP]
 
-$program_name {-h | -v}
+$program_name {-h | -v | --info}
 
 Purge versioned kernel packages according to user's orders. Purging is
 not restricted to linux-image packages, but all versioned linux-*
@@ -145,6 +145,7 @@ Options:
 					methods to be able to purge kernels from a system
 					with broken dependencies and/or lack of free inodes.
 	-h, --help  	Display this help and exit.
+	--info			Show some kernel related information.
 	-i APP, -iAPP, --interface APP, --interface=APP
 					Choose application used for generating user interface, when
 					selecting kernels; see option -c.
@@ -268,6 +269,63 @@ get_set_complement() {
 	comm -23 <(sort -u <(printf %s "$1")) <(sort -u <(printf %s "$2")) \
 	| linux-version sort
 }
+
+get_info() {
+	printf 'Booted kernel: %s\n' "$current"
+	printf 'Size of the kernel (in /boot): %iMB\n'  "$(get_release_size_boot $current)"
+	printf 'Space used in /boot: %s\n' "$(du --summarize --block-size=MB /boot 2>/dev/null | cut -f1)"
+	printf 'Free space in /boot: %iMB (for superuser)\n' "$(avail_boot)"
+	printf 'Mount point of /boot directory: %s\n' "$boot"
+	printf '\n'
+	printf 'Inode usage of /usr/src (including linux headers):\n'
+	df --inodes /usr/src
+
+	printf '\n'
+	local meta_kernels=$(dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' \
+	| awk '/^[ih].. linux-(.+-)?image-/{print $2}' \
+	| grep -Ev '[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+')
+
+	declare -A avail
+	declare -r regex1=': linux-(signed-)?image-(unsigned-)*([[:digit:]]+\..*)'
+	while IFS= read -r line; do
+		[[ ${line:0:1} == l ]] && kernel=$line || {
+			[[ $line =~ $regex1 ]] && avail[$kernel]="${BASH_REMATCH[3]}"
+		}
+	done < <(apt-cache depends --important $meta_kernels)
+
+	declare -A inst_pkg inst
+	declare -r regex2='([^ ]*).* (linux-(signed-)?image-(unsigned-)?([[:digit:]]+\.[^, ]*))'
+	while IFS= read -r line; do
+		[[ $line =~ $regex2 ]] && {
+			inst_pkg[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
+			inst[${BASH_REMATCH[1]}]=${BASH_REMATCH[5]}
+		}
+	done < <(dpkg-query -W -f '${Package} ${Depends} ${Pre-Depends}\n' $meta_kernels)
+
+	mapfile -t meta <<<"$meta_kernels"
+
+	format='%-28s %-25s %-25s\n'
+	printf "$format" 'Installed Meta-Kernel:' \
+	'Current Available:' 'Installed:'
+	for i in ${!meta[*]}; do
+		metapkg=${meta[$i]}
+		[[ -z ${inst[$metapkg]+x} && -z ${avail[$metapkg]+x} ]] && unset "meta[$i]" \
+		|| printf "$format" $metapkg  ${avail[$metapkg]-} \
+		${inst[$metapkg]-}
+	done
+
+	printf '\n%s\n' 'Related Manually Installed Meta Packages:'
+	manual_meta=$(apt-cache rdepends --installed --important --recurse $meta_kernels \
+	| grep -v -e '^Reverse Depends:' -e '^ ' | sort -u | xargs apt-mark showmanual)
+	printf '%s\n\n' "$manual_meta"
+
+	printf 'dpkg Listing:\n'
+	dpkg --list $manual_meta "${meta[@]}" "${inst_pkg[@]}" \
+	$(awk -F - '{print "linux-headers-"$0 "\nlinux-headers-"$1"-"$2}' \
+	< <(printf '%s\n' "${inst[@]}"))
+}
+
+
 
 # Delete extra initrd.img backups (LP: #1515513)
 remove_extra_initrds() {
@@ -725,8 +783,9 @@ env -u GETOPT_COMPATIBLE getopt --test >/dev/null ||
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
 params=$(env -u GETOPT_COMPATIBLE getopt -o abcdfhi:k:mnosvy -l auto-only,\
-clear-boot,choose,debug,fix,help,interface:,keep:,manual,no-legend,optimize,\
-simulate,version,yes --name "[$program_name] ERROR" -- "$@") || {
+clear-boot,choose,debug,fix,help,info,interface:,keep:,manual,no-legend,\
+optimize,simulate,version,yes --name "[$program_name] ERROR" -- "$@") \
+|| {
 	err_code=$?
 	case $err_code in
 		1) error_called=1; exit 1 ;;
@@ -754,6 +813,10 @@ while :; do
 			;;
 		-h|--help)
 			show_help
+			exit
+			;;
+		--info)
+			get_info
 			exit
 			;;
 		-i|--interface)

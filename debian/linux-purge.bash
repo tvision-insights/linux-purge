@@ -3,7 +3,8 @@ _linux_purge() {
 	_init_completion || return
 
 	local opts="--auto-only --clear-boot --choose --debug --fix --help \
---interface --keep --manual --no-legend --optimize --simulate --version --yes"
+--info --interface --keep --manual --no-legend --optimize --simulate \
+--version --yes"
 
 # Short options are redundant and not that informative; uncomment if you want to
 # complete them anyway.
