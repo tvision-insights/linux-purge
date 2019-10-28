@@ -904,17 +904,17 @@ error "Must be run as root, if not in simulation mode. Hint:
 		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' linux-'*'
 		printf '\n## trace and output:\n'
 	} >$debug_file 2>&1
-	chmod +r $debug_file
+	exec {FD}>>$debug_file
+	export BASH_XTRACEFD="$FD" # Bash trace goes only to debug file
 	set -x
 }
-
 {
 if [[ $fix ]]; then
 	run_fix
 else
 	purge_normally
 fi
-}> >(tee --append $debug_file) 2> >(tee --append $debug_file >&2)
+} > >(tee -ia $debug_file) 2> >(tee -ia $debug_file >&2)
 
 set +x
 [[ $debug ]] || note "If you find this software useful, please donate. You can \
