@@ -8,7 +8,7 @@
 #
 #  Editing: Use tabulator width 4 for indentation.
 #
-#  Copyright (C) 2017 Jarno Ilari Suni <8@iki.fi>
+#  Copyright (C) 2019 Jarno Ilari Suni <8@iki.fi>
 #
 #    Author: Jarno Ilari Suni <8@iki.fi>
 #
@@ -109,9 +109,9 @@ show_help() {
 # Convert tabs by 4 spaces in the here document.
 printf "Usage (using short options):
 
-$program_name [-bcdnosy] [{-k NUM [-a]} | -m] [-i APP]
+$program_name [-bcnosy] [{-k NUM [-a]} | -m] [-i APP] [-d[FILE]]
 
-$program_name -f [-bdns] [-i APP]
+$program_name -f [-bns] [-i APP] [-d[FILE]]
 
 $program_name {-h | -v | --info}
 
@@ -136,8 +136,11 @@ Options:
 	-c, --choose	Choose interactively which kernels to purge. Other
 					options determine which kernels are selected to
 					start with.
-	-d, --debug 	Store the command trace and some other debug information
-					in a file whose name is given in the output.
+	-d, -dFILE --debug, --debug=FILE
+					Store the command trace and some other debug information
+					in a given FILE. If FILE is not given, file matching
+					/tmp/linux-purge.debug_* is created. The file name is
+					shown in the output finally.
 	-f, --fix   	Use this, if the program fails otherwise. Try to fix
 					broken dependencies, which are typical in case a
 					filesystem has no space left. If needed, try to purge
@@ -185,7 +188,7 @@ sed 's/\t/    /g'
 
 show_version() {
 printf "GNU $program_full_name $program_version
-Copyright (C) 2017 Jarno Ilari Suni
+Copyright (C) 2019 Jarno Ilari Suni
 License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.\n"
@@ -782,8 +785,8 @@ Hint: try running the command with --fix option." 3
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null ||
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
-params=$(env -u GETOPT_COMPATIBLE getopt -o abcdfhi:k:mnosvy -l auto-only,\
-clear-boot,choose,debug,fix,help,info,interface:,keep:,manual,no-legend,\
+params=$(env -u GETOPT_COMPATIBLE getopt -o abcd::fhi:k:mnosvy -l auto-only,\
+clear-boot,choose,debug::,fix,help,info,interface:,keep:,manual,no-legend,\
 optimize,simulate,version,yes --name "[$program_name] ERROR" -- "$@") \
 || {
 	err_code=$?
@@ -806,7 +809,9 @@ while :; do
 			choose=1
 			;;
 		-d|--debug)
+			debug_file=$2
 			debug=1
+			shift
 			;;
 		 -f|--fix)
 			fix=1
@@ -825,14 +830,12 @@ while :; do
 			 d|dialog) interface=d ;;
 			 *) error "'$2' is invalid interface ID." 1
 			esac
-			shift 2
-			continue
+			shift
 			;;
 		-k|--keep)
 			keep=1
 			n=$2
-			shift 2
-			continue
+			shift
 			;;
 		-m|--manual)
 			manual=1
@@ -893,7 +896,8 @@ error "Must be run as root, if not in simulation mode. Hint:
 }
 
 [[ $debug ]] && {
-	debug_file=$(mktemp /tmp/linux-purge.debug_XXX)
+	[[ $debug_file ]] || debug_file=$(mktemp /tmp/linux-purge.debug_XXX)
+	touch -- "$debug_file" || { debug_file=; exit 1; }
 	{
 		printf '## linux-purge version: %s\n' $program_version
 		printf '## options: %s\n' "$params"
@@ -903,8 +907,8 @@ error "Must be run as root, if not in simulation mode. Hint:
 		printf '## linux packages:\n'
 		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' linux-'*'
 		printf '\n## trace and output:\n'
-	} >$debug_file 2>&1
-	exec {FD}>>$debug_file
+	} >$debug_file
+	exec {FD}>>"$debug_file"
 	export BASH_XTRACEFD="$FD" # Bash trace goes only to debug file
 	set -x
 }
@@ -914,7 +918,7 @@ if [[ $fix ]]; then
 else
 	purge_normally
 fi
-} > >(tee -ia $debug_file) 2> >(tee -ia $debug_file >&2)
+} > >(tee -ia -- "$debug_file") 2> >(tee -ia -- "$debug_file" >&2)
 
 set +x
 [[ $debug ]] || note "If you find this software useful, please donate. You can \

@@ -1,23 +1,47 @@
-_linux_purge() {
-	local cur prev words cword wordlist
-	_init_completion || return
+_linux-purge()
+{
+	local IFS=$'\n' # needed for handling trailing space of some options and all arguments
+	local cur prev words cword split # needed by _init_completion()
+	local opts args opt i prefix= wordlist
+	local -A args
+	# Do not treat = as word breaks even if they are in $COMP_WORDBREAKS:
+	# Split option=value into option in $prev and value in $cur
+	_init_completion -s || return
 
-	local opts="--auto-only --clear-boot --choose --debug --fix --help \
---info --interface --keep --manual --no-legend --optimize --simulate \
---version --yes"
+	# DEFINE OPTIONS THAT DO NOT TAKE AN ARGUMENT HERE:
+	opts=(auto-only clear-boot choose fix help info manual no-legend \
+optimize simulate version yes debug)
+	# DEFINE THE OPTIONS WITH ARGUMENTS HERE:
+	args=([debug]= [interface]=$'dialog\nwhiptail' [keep]=$(seq 0 9))
 
-# Short options are redundant and not that informative; uncomment if you want to
-# complete them anyway.
-#	opts+='-a -b -c -d -f -h -i -k -m -n -o -s -v -y'
+	for i in ${!args[*]}; do
+		if [[ $prev = --$i ]]; then
+			local j dobreak=
+			[[ $split == false ]] && {
+				# equal sign not used; check, if argument is optional.
+				for j in ${opts[*]}; do [[ $i == $j ]] && { dobreak=t; break; } done
+			}
+			[[ $dobreak ]] && break
 
-	case $prev in
-		-k|--keep)
-			[[ $cur =~ ^[0-9]+$ ]] && COMPREPLY=( "$cur" ) || COMPREPLY=( );
-			return 0 ;;
-	esac
-	[[ $prev =~ ^-([^-]*i|-interface)$ ]] && wordlist='dialog whiptail' \
-	|| wordlist='$opts'
+			[[ "$COMP_WORDBREAKS" != *=* && $split == true ]] && prefix="--$i="
+			if [[ ${args[$i]} ]]; then
+				COMPREPLY=( $( compgen -P "$prefix" -W "${args[$i]}" -- "$cur" ) )
+			else
+				case $i in
+					debug)
+						COMPREPLY=( $( compgen -P "$prefix" -A file -- "$cur" ) )
+						compopt -o filenames ;;
+				esac
+			fi
+			return 0
+		fi
+	done
 
-	COMPREPLY=( $( compgen -W "$wordlist" -- "$cur" ) )
-	return 0
-} && complete -F _linux_purge linux-purge
+	wordlist=()
+	for i in ${opts[*]}; do wordlist+=("--$i "); done
+	for i in ${!args[*]}; do wordlist+=("--$i="); done
+	COMPREPLY=( $( compgen -W "${wordlist[*]}" -- "$cur" ) )
+	compopt -o nospace
+} && complete -F _linux-purge linux-purge
+
+
