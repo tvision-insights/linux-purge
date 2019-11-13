@@ -897,7 +897,8 @@ error "Must be run as root, if not in simulation mode. Hint:
 
 [[ $debug ]] && {
 	[[ $debug_file ]] || debug_file=$(mktemp /tmp/linux-purge.debug_XXX)
-	touch -- "$debug_file" || { debug_file=; exit 1; }
+	touch -- "$debug_file" && [[ -w $debug_file ]] \
+	 || { debug_file=; error 'Can not write to the debug file.' 3; }
 	{
 		printf '## linux-purge version: %s\n' $program_version
 		printf '## options: %s\n' "$params"
