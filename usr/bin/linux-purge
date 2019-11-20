@@ -777,6 +777,13 @@ Hint: try running the command with --fix option." 3
 	[[ $simulate ]] || remove_extra_initrds
 }
 
+operate() {
+	if [[ $fix ]]; then
+		run_fix
+	else
+		purge_normally
+	fi
+}
 
 # Main program
 
@@ -912,15 +919,9 @@ error "Must be run as root, if not in simulation mode. Hint:
 	exec {FD}>>"$debug_file"
 	export BASH_XTRACEFD="$FD" # Bash trace goes only to debug file
 	set -x
-}
-{
-if [[ $fix ]]; then
-	run_fix
-else
-	purge_normally
-fi
-} > >(tee -ia -- "$debug_file") 2> >(tee -ia -- "$debug_file" >&2)
+	operate > >(tee -ia -- "$debug_file") 2> >(tee -ia -- "$debug_file" >&2)
+	set +x
+} || operate
 
-set +x
 [[ $debug ]] || note "If you find this software useful, please donate. You can \
 find the details at the Launchpad page: <https://launchpad.net/linux-purge>"
