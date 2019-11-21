@@ -11,7 +11,7 @@ set -o errexit
 
 # install the executable
 cd /usr/local/bin/
-wget -N https://git.launchpad.net/linux-purge/plain/usr/bin/linux-purge
+wget -N https://git.launchpad.net/linux-purge/plain/linux-purge
 chmod +x linux-purge
 
 # install manual page
@@ -35,4 +35,3 @@ dpkg --compare-versions $(dpkg-query -W -f'${Version}\n' bash-completion) ge '1:
 cd "$compdir"
 wget -N https://git.launchpad.net/linux-purge/plain/debian/linux-purge.bash
 [[ $use_local ]] || mv -f linux-purge.bash linux-purge
-
