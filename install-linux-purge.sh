@@ -24,10 +24,8 @@ mandb -q
 
 # install Bash completion
 compdir=/usr/share/bash-completion/completions # for Ubuntu 16.04 and older
-use_local=
 dpkg --compare-versions $(dpkg-query -W -f'${Version}\n' bash-completion) ge '1:2.2' \
 && {
-	use_local=1
 	rm -f "$compdir"/linux-purge # delete possible old file
 	compdir=/usr/local/share/bash-completion/completions
 	mkdir -p "$compdir"
