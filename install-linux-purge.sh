@@ -33,5 +33,5 @@ dpkg --compare-versions $(dpkg-query -W -f'${Version}\n' bash-completion) ge '1:
 	mkdir -p "$compdir"
 }
 cd "$compdir"
-wget -N https://git.launchpad.net/linux-purge/plain/debian/linux-purge.bash
-[[ $use_local ]] || mv -f linux-purge.bash linux-purge
+wget -N https://git.launchpad.net/linux-purge/plain/debian/linux-purge.bash-completion
+mv -f linux-purge.bash-completion linux-purge
