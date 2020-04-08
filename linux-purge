@@ -172,7 +172,7 @@ Options:
 					methods to be able to purge kernels from a system
 					with broken dependencies and/or lack of free inodes.
 	-h, --help  	Display this help and exit.
-	--info			Show some kernel related information.
+	--info  		Show some kernel related information.
 	-i APP, -iAPP, --interface APP, --interface=APP
 					Choose application used for generating user interface, when
 					selecting kernels; see option -c.
