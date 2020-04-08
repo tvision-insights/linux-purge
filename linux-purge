@@ -8,7 +8,7 @@
 #
 #  Editing: Use tabulator width 4 for indentation.
 #
-#  Copyright (C) 2019 Jarno Ilari Suni <8@iki.fi>
+#  Copyright (C) Jarno Ilari Suni <8@iki.fi>
 #
 #    Author: Jarno Ilari Suni <8@iki.fi>
 #
@@ -31,6 +31,7 @@ export LC_ALL=C # Use C locale to get standard sorting and better regex
 readonly program_name='linux-purge' \
 program_full_name='linux-purge' \
 program_version='1.0' \
+copyright_years='2017-2020' \
 MB=1000000 \
 width=60
 readonly w_error='Terminal screen not wide enough. Minimum is '$width' columns.' \
@@ -212,7 +213,7 @@ sed 's/\t/    /g'
 
 show_version() {
 printf "$program_full_name $program_version
-Copyright (C) 2019 Jarno Ilari Suni
+Copyright (C) $copyright_years Jarno Ilari Suni
 License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.\n"
