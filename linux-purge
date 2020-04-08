@@ -49,6 +49,7 @@ choose= # Do not let user choose kernels to purge interactively.
 debug= # not debug mode
 debug_file=
 fix= # do not fix
+info= # do not show info
 simulate= # no simulation
 yes= # interactive mode
 manual= # do not mark manually installed for purge
@@ -98,6 +99,29 @@ ${debug_file}"
 # NOTE: in case of power cut this will not be done and update-grub may
 # be left non-executable!
 trap finnish EXIT
+
+debug() {
+	[[ $debug_file ]] || debug_file=$(mktemp /tmp/linux-purge.debug_XXX)
+	touch -- "$debug_file" && [[ -w $debug_file ]] \
+	 || { debug_file=; error 'Can not write to the debug file.' 3; }
+	{
+		printf '## start time: '
+		LC_ALL=C date
+		printf '## linux-purge version: %s\n' $program_version
+		printf '## options: %s\n' "$params"
+		printf '## OS: %s\n' "$(lsb_release -d | cut -d$'\t' -f2)"
+		printf '## awk version:\n'
+		awk -W version
+		printf '## linux packages:\n'
+		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' linux-'*'
+		printf '\n## trace and output:\n'
+	} >$debug_file
+	exec {FD}>>"$debug_file"
+	export BASH_XTRACEFD="$FD" # Bash trace goes only to debug file
+	set -x
+	"$@" > >(tee -ia -- "$debug_file") 2> >(tee -ia -- "$debug_file" >&2)
+	set +x
+}
 
 run_update_grub() {
 	restore_update_grub
@@ -817,7 +841,7 @@ while :; do
 			;;
 		-d|--debug)
 			debug_file=$2
-			debug=1
+			debug='debug'
 			shift
 			;;
 		 -f|--fix)
@@ -828,8 +852,7 @@ while :; do
 			exit
 			;;
 		--info)
-			get_info
-			exit
+			info=1
 			;;
 		-i|--interface)
 			case $2 in
@@ -871,6 +894,11 @@ while :; do
 	shift
 done
 
+[[ $info ]] && {
+	$debug get_info
+	exit
+}
+
 if [[ $keep ]]; then
 	[[ "$n" =~ ^[0-9]+$ ]] ||
 	error "'$n' is invalid number of older kernels to keep." 1
@@ -902,26 +930,10 @@ error "Must be run as root, if not in simulation mode. Hint:
 	}
 }
 
-[[ $debug ]] && {
-	[[ $debug_file ]] || debug_file=$(mktemp /tmp/linux-purge.debug_XXX)
-	touch -- "$debug_file" && [[ -w $debug_file ]] \
-	 || { debug_file=; error 'Can not write to the debug file.' 3; }
-	{
-		printf '## linux-purge version: %s\n' $program_version
-		printf '## options: %s\n' "$params"
-		printf '## OS: %s\n' "$(lsb_release -d | cut -d$'\t' -f2)"
-		printf '## awk version:\n'
-		awk -W version
-		printf '## linux packages:\n'
-		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' linux-'*'
-		printf '\n## trace and output:\n'
-	} >$debug_file
-	exec {FD}>>"$debug_file"
-	export BASH_XTRACEFD="$FD" # Bash trace goes only to debug file
-	set -x
-	operate > >(tee -ia -- "$debug_file") 2> >(tee -ia -- "$debug_file" >&2)
-	set +x
-} || operate
-
-[[ $debug ]] || note "If you find this software useful, please donate. You can \
+if [[ $debug ]]; then
+	debug operate
+else
+	operate
+	note "If you find this software useful, please donate. You can \
 find the details at the Launchpad page: <https://launchpad.net/linux-purge>"
+fi
