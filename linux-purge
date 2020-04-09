@@ -525,11 +525,12 @@ free_some_inodes() {
 	local HeaderVersions=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
 	sed -rn "s/^.i  linux-headers-([0-9.]+(-[^-]+)?)$/\1/p" | linux-version sort)
 	HeaderVersions=$(get_set_complement "$HeaderVersions" \
-	"$(printf '%s\n%s\n%s' \
-	 "$(get_latest_releases | cut -d'-' -f1,2)" \
-	 "$(printf %s "$current" | cut -d'-' -f1,2)" \
-	 "$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
-	   sed -nr 's/^hi  linux-image-([0-9.]+(-[^-]+)?).*/\1/p')")")
+	"$(printf '%s\n' \
+	 $(get_latest_releases | cut -d'-' -f1,2) \
+	 $(printf %s "$current" | cut -d'-' -f1,2) \
+	 $(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
+	   sed -nr 's/^hi  linux-image-([0-9.]+(-[^-]+)?).*/\1/p'))")
+
 	# Restrict to versions that have related linux packages "ok".
 	local version okVersions=
 	for version in $HeaderVersions; do
@@ -568,7 +569,7 @@ purge_manually() {
 	| sed -nr "s/^.i  linux-image-(unsigned-)?([0-9]+\..+)/\2/p" \
 	| linux-version sort)
 	for release in $(get_set_complement "$InstalledReleases" \
-	"$(printf '%s\n%s' "$(get_latest_releases)" "$current")"); do
+	"$(printf '%s\n' $(get_latest_releases) $current)"); do
 		version=$(printf %s "$release" | cut -d- -f1,2)
 		flavour=$(printf %s "$release" | cut -s -d- -f3-)
 		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' | grep -qE \
@@ -704,8 +705,8 @@ you may have to reinstall the package by 'apt-get install --reinstall'." 3
 			# with "hold".
 			ManualReleases=$(get_manual_releases)
 			HoldReleases=$(get_hold_releases)
-			ReleasesToKeep=$(printf '%s\n%s\n%s' "$current" \
-			"$(get_set_complement "$Releases" "$ManualReleases")" "$HoldReleases" \
+			ReleasesToKeep=$(printf '%s\n' $current \
+			$(get_set_complement "$Releases" "$ManualReleases") $HoldReleases \
 			| linux-version sort | uniq)
 		} ||
 		ReleasesToKeep=$Releases
@@ -725,9 +726,9 @@ can not decide which kernels to keep." 3
 		# hold and the currently booted kernel (though it may be included already).
 		[[ $auto_only ]] && ManualReleases=$(get_manual_releases)
 		HoldReleases=$(get_hold_releases)
-		ReleasesToKeep=$(printf '%s\n%s\n%s\n%s' \
-		"$ReleasesToKeep" "$current" "$([[ $auto_only ]] && printf %s \
-		 "$ManualReleases")" "$HoldReleases" | linux-version sort | uniq)
+		ReleasesToKeep=$(printf '%s\n' \
+		$ReleasesToKeep $current $([[ $auto_only ]] && printf %s \
+		 "$ManualReleases") $HoldReleases | linux-version sort | uniq)
 	fi
 
 	if [[ $choose ]]; then
