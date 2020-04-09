@@ -138,7 +138,7 @@ $program_name [-bcnosy] [{-k NUM [-a]} | -m] [-i APP] [-d[FILE]]
 
 $program_name -f [-bns] [-i APP] [-d[FILE]]
 
-$program_name {-h | -v | --info}
+$program_name {-h | -v | --info [-d[FILE]]}
 
 Purge versioned kernel packages according to user's orders. Purging is
 not restricted to linux-image packages, but all versioned linux-*
