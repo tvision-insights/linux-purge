@@ -247,7 +247,9 @@ get_meta_kernels() {
 # Get the list of Linux releases that have depending kernel meta packages.
 # Note: Depends on Ubuntu's package naming policy
 get_latest_releases() {
-	dpkg-query -W -f '${Depends}\n${Pre-Depends}\n' $(get_meta_kernels) \
+	local meta_kernels=$(get_meta_kernels)
+	[[ -z $meta_kernels ]] \
+	|| dpkg-query -W -f '${Depends}\n${Pre-Depends}\n' $meta_kernels \
 	| sed -r -e 's/ \([^)]*\)//g' -e 's/,? (\| )?/\n/g' \
 	| sed -nr 's/^linux-(signed-)?image-(unsigned-)?([0-9]+\..+)/\3/p' \
 	| linux-version sort | uniq
@@ -309,9 +311,11 @@ get_info() {
 	df --inodes /usr/src
 
 	printf '\n'
-	local meta_kernels=$(dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' \
-	| awk '/^[ih].. linux-(.+-)?image-/{print $2}' \
-	| grep -Ev '[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+')
+	local meta_kernels=$(get_meta_kernels)
+
+	[[ $meta_kernels ]] || {
+		printf '%s\n' 'No meta kernels found.'; exit
+	}
 
 	declare -A avail
 	declare -r regex1=': linux-(signed-)?image-(unsigned-)*([[:digit:]]+\..*)'
@@ -708,6 +712,8 @@ you may have to reinstall the package by 'apt-get install --reinstall'." 3
 	else
 		ReleasesToKeep=
 		LatestReleases=$(get_latest_releases)
+		[[ $LatestReleases ]] || error "There are no meta-kernels so \
+can not decide which kernels to keep." 3
 		for release in $LatestReleases; do
 			[[ $ReleasesToKeep ]] && ReleasesToKeep+=$'\n'
 			ReleasesToKeep+=$(printf %s "$Releases" |
