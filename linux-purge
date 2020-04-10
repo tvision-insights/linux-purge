@@ -28,6 +28,9 @@ set -u -e
 export LC_ALL=C # Use C locale to get standard sorting and better regex
 # performance.
 
+export TMPDIR=/dev/shm # set mktemp use tmpfs filesystem by default
+# if template is not given as absolute path.
+
 readonly program_name='linux-purge' \
 program_full_name='linux-purge' \
 program_version='1.0' \
@@ -41,6 +44,7 @@ current=$(uname -r) \
 boot=$(stat  --format="%m" /boot) # = mount point under which /boot is found
 readonly cs=';' # column separator used for dialog command. Will be displayed
 # as is with whiptail command. It should not contain space.
+readonly error_file=$(mktemp)
 
 # Default values for command line options:
 keep= # explicit keep option not detected
@@ -56,7 +60,6 @@ yes= # interactive mode
 manual= # do not mark manually installed for purge
 legend=1 # display legend in checklist by default
 optimize= # Do not optimize by default
-error_called=
 interface=d
 
 # update-grub control variables
@@ -68,7 +71,7 @@ unset -v LatestReleases ManualReleases HoldReleases
 
 error() {
 	printf '[%s] ERROR: %s\n' "$program_name" "$1" | fold -s >&2
-	error_called=1
+	[[ ${3+x} ]] || echo 1 >"$error_file"
 	exit ${2:-1}
 }
 
@@ -90,11 +93,13 @@ restore_update_grub() {
 
 finnish() {
 	err=$?
-	[[ $error_called ]] && err=0
+	[[ $(<"$error_file") ]] && err=0
+	rm -- "$error_file"
 	restore_update_grub
 	[[ $debug_file ]] && note "The debug information is saved in
 ${debug_file}"
-	[[ $err -eq 0 ]] || error "Aborting due to an unknown error ($err)." 3
+	[[ $err -eq 0 ]] \
+	 || error "Aborting due to an unknown error ($err)." 3 .
 }
 
 # NOTE: in case of power cut this will not be done and update-grub may
@@ -473,7 +478,7 @@ getReleasesToPurge() {
 	eval $(resize)
 	local -r title='Choose Which Kernels to Purge'
 	local -r height=$(($(tput lines)-6))
-	[[ $(tput cols) -lt $width ]] && error "$w_error"
+	[[ $(tput cols) -lt $width ]] && error "$w_error" 3
 	local -r legend_text="Legend of the content on the right:
 - asterisk (*): removing this will usually remove kernel metapackage
 - plus (+): removing this will usually upgrade kernel metapackage
@@ -488,7 +493,7 @@ Free space on /boot: $(avail_boot) MB$([[ $boot != '/boot' ]] &&
 $([[ $legend ]] && printf %s "$legend_text")"
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	local -r listheight=$((height-infolines-6))
-	[[ $listheight -lt 1 ]] && error "$h_error"
+	[[ $listheight -lt 1 ]] && error "$h_error" 3
 	if [[ $interface = d ]]; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=1 DIALOG_ERROR=11
 		dialog --title "$title" --stdout --keep-tite --separate-output \
@@ -509,13 +514,13 @@ $([[ $legend ]] && printf %s "$legend_text")"
 getVersionToPurge() {
 	eval $(resize)
 	local -r height=$(($(tput lines)-6))
-	[[ $(tput cols) -lt $width ]] && error "$w_error"
+	[[ $(tput cols) -lt $width ]] && error "$w_error" 3
 	local -r title='Choose Which Linux Kernel to Purge'
 	local -r infotext='The program purges the chosen kernel in
 a special way due to lack of free inodes.'
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	local -r listheight=$((height-infolines-6))
-	[[ $listheight -lt 1 ]] && error "$h_error"
+	[[ $listheight -lt 1 ]] && error "$h_error" 3
 	if [[ $interface = d ]]; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=1 DIALOG_ERROR=11
 		dialog --title "$title" --backtitle "$program_full_name" --keep-tite \
@@ -552,7 +557,7 @@ free_some_inodes() {
 		  okVersions+="$version "
 	done
 	okVersions=${okVersions%% }
-	[[ $okVersions ]] || error "No suitable version to purge." 3
+	[[ $okVersions ]] || error 'No suitable version to purge.' 3
 	[[ $(printf %s "$okVersions" | wc -w) == 1 ]] && version=$okVersions ||
 	 version=$(getVersionToPurge "$okVersions") || exit $?
 
@@ -592,7 +597,7 @@ purge_manually() {
 
 	okReleases=${okReleases%% }
 
-	[[ $okReleases ]] || error "Could not find a safe kernel to purge." 3
+	[[ $okReleases ]] || error 'Could not find a safe kernel to purge.' 3
 
 	# Choose kernel(s) interactively.
 	local ReleasesToPurge
