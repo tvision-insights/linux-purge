@@ -61,6 +61,7 @@ manual= # do not mark manually installed for purge
 legend=1 # display legend in checklist by default
 optimize= # Do not optimize by default
 interface=d
+operation=purge
 
 # update-grub control variables
 update_grub_disabled=
@@ -137,11 +138,11 @@ run_update_grub() {
 # Usage info
 show_help() {
 # Convert tabs by 4 spaces in the here document.
-printf "Usage (using short options):
+printf "Usage:
 
-$program_name [-bcnosy] [{-k NUM [-a]} | -m] [-i APP] [-d[FILE]]
+$program_name [-bcnorsy] [{-k NUM [-a]} | -m] [-i APP] [-d[FILE]]
 
-$program_name -f [-bns] [-i APP] [-d[FILE]]
+$program_name -f [-bnrs] [-i APP] [-d[FILE]]
 
 $program_name {-h | -v | --info [-d[FILE]]}
 
@@ -196,6 +197,7 @@ Options:
 					manually installed.
 	-n, --no-legend Do not display legend in checklist used by -c and -f.
 	-o, --optimize  Run update-grub only once in normal operation.
+	-r, --remove	Remove packages instead of purging them.
 	-s, --simulate  Dry-run; do not actually remove packages. You may
 					run this as regular user. Note that in some cases
 					simulation is not complete since some actions may
@@ -476,7 +478,7 @@ $rdirs.*$regex" || note "Answer y to remove the files."
 # error.
 getReleasesToPurge() {
 	eval $(resize)
-	local -r title='Choose Which Kernels to Purge'
+	local -r title='Choose Which Kernels to '${operation^}
 	local -r height=$(($(tput lines)-6))
 	[[ $(tput cols) -lt $width ]] && error "$w_error" 3
 	local -r legend_text="Legend of the content on the right:
@@ -515,7 +517,7 @@ getVersionToPurge() {
 	eval $(resize)
 	local -r height=$(($(tput lines)-6))
 	[[ $(tput cols) -lt $width ]] && error "$w_error" 3
-	local -r title='Choose Which Linux Kernel to Purge'
+	local -r title='Choose Which Linux Kernel to '${operation^}
 	local -r infotext='The program purges the chosen kernel in
 a special way due to lack of free inodes.'
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
@@ -570,7 +572,7 @@ free_some_inodes() {
 	note "Removing matching initrd image(s). (LP: #1678187)"
 	[[ $simulate ]] || rm -fv /boot/initrd.img-"${version}"-*
 	note "Purging the kernel by dpkg ..."
-	dpkg --purge --abort-after=1 $simulate \
+	dpkg --$operation --abort-after=1 $simulate \
 	$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
 	 awk '/^.i  linux-.+-'"$(escape_regex ${version})"'(-.*)?$/{print $2}') || {
 		error "Purging by dpkg failed; dpkg error $?." 3
@@ -619,16 +621,16 @@ purge_manually() {
 			error 'You should have chosen at least one release.' 3
 	}
 	for release in $ReleasesToPurge; do
-		note "Removing matching initrd image. (LP: #1678187)"
+		note 'Removing matching initrd image. (LP: #1678187)'
 		[[ $simulate ]] || rm -fv /boot/initrd.img-"${release}"{,.*}
-		note "Purging the kernel by dpkg ..."
-		dpkg --purge --abort-after=1 $simulate \
+		note 'Deleting the kernel by dpkg ...'
+		dpkg --$operation --abort-after=1 $simulate \
 			$(dpkg-query -W -f='${Package}\n' |
 			awk '/^linux-.+-'"$(escape_regex $release)"'$/') ||
-				error "Purging by dpkg failed; dpkg error $?." 3
+				error "dpkg failed; dpkg error $?." 3
 				# NOTE: some packages may have selection state "purge".
 		[[ $simulate ]] ||
-		 dpkg --purge \
+		 dpkg --$operation \
 		  $(dpkg-query -W -f='${Package}\n' |
 		  awk '/^linux-.+-'"$(escape_regex $(printf %s $release |
 		   cut -d- -f1,2))"'$/') 2>/dev/null || true
@@ -637,7 +639,7 @@ purge_manually() {
 		# installed and not going to be purged, that is ok.
 	done
 	if [[ $simulate ]]; then
-		note "Did not try to purge non-flavour versioned kernel packages in \
+		note "Did not try to delete non-flavour versioned kernel packages in \
 simulation mode."
 	fi
 }
@@ -660,7 +662,7 @@ run_fix() {
 why this happened. Select action accordingly below:"
 		while true; do
 			printf '%s' "\
-1) Purge some kernel(s) to free space and then retry
+1) Delete some kernel(s) to free space and then retry
 2) Run 'dpkg --configure -a' and retry. (Choose this, if recommended above.)
 3) Quit
 #? ";
@@ -821,11 +823,11 @@ can not decide which kernels to keep." 3
 			  update_grub_disabled=1
 			}
 		}
-		apt-get $simulate $yes purge $PkgsToPurge || {
+		apt-get $simulate $yes $operation $PkgsToPurge || {
 			err_code=$?
 			[[ err_code -eq 1 ]] && exit 0 # User aborted
 			[[ $update_grub_disabled ]] && run_update_grub
-			error "Purging by apt-get failed; apt-get error $err_code.
+			error "apt-get failed; apt-get error $err_code.
 Hint: try running the command with --fix option." 3
 		}
 		[[ $update_grub_disabled ]] && run_update_grub
@@ -849,9 +851,9 @@ operate() {
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null ||
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
-params=$(env -u GETOPT_COMPATIBLE getopt -o abcd::fhi:k:mnosvy -l auto-only,\
+params=$(env -u GETOPT_COMPATIBLE getopt -o abcd::fhi:k:mnosrvy -l auto-only,\
 clear-boot,choose,debug::,fix,help,info,interface:,keep:,manual,no-legend,\
-optimize,simulate,version,yes --name "[$program_name] ERROR" -- "$@") \
+optimize,remove,simulate,version,yes --name "[$program_name] ERROR" -- "$@") \
 || {
 	err_code=$?
 	case $err_code in
@@ -908,6 +910,9 @@ while :; do
 			;;
 		-o|--optimize)
 			optimize=1
+			;;
+		-r|--remove)
+			operation=remove
 			;;
 		-s|--simulate)
 			simulate='--simulate'

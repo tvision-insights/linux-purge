@@ -3,11 +3,11 @@
 .SH NAME
 linux-purge \- purge obsolete kernels in Ubuntu
 .SH DESCRIPTION
-Usage (using short options):
+Usage:
 .PP
-linux\-purge [\-bcnosy] [{\-k NUM [\-a]} | \fB\-m]\fR [\-i APP] [\-d[FILE]]
+linux\-purge [\-bcnorsy] [{\-k NUM [\-a]} | \fB\-m]\fR [\-i APP] [\-d[FILE]]
 .PP
-linux\-purge \fB\-f\fR [\-bns] [\-i APP] [\-d[FILE]]
+linux\-purge \fB\-f\fR [\-bnrs] [\-i APP] [\-d[FILE]]
 .PP
 linux\-purge {\-h | \fB\-v\fR | \fB\-\-info\fR [\-d[FILE]]}
 .PP
@@ -79,6 +79,9 @@ manually installed.
 .TP
 \fB\-o\fR, \fB\-\-optimize\fR
 Run update\-grub only once in normal operation.
+.TP
+\fB\-r\fR, \fB\-\-remove\fR
+Remove packages instead of purging them.
 .TP
 \fB\-s\fR, \fB\-\-simulate\fR
 Dry\-run; do not actually remove packages. You may
