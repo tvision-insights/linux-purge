@@ -33,7 +33,7 @@ program_full_name='linux-purge' \
 program_version='1.0' \
 copyright_years='2017-2020' \
 MB=1000000 \
-width=60
+width=72
 readonly w_error='Terminal screen not wide enough. Minimum is '$width' columns.' \
 h_error='Not enough lines in terminal screen.' \
 lockfile='/var/lib/dpkg/lock' \
@@ -244,7 +244,8 @@ get_meta_kernels() {
 	| grep -Ev '[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+'
 }
 
-# Get the list of Linux releases that have depending kernel meta packages.
+# Get list of latest installed kernel releases that installed meta kernels
+# depend on.
 # Note: Depends on Ubuntu's package naming policy
 get_latest_releases() {
 	local meta_kernels=$(get_meta_kernels)
@@ -252,6 +253,17 @@ get_latest_releases() {
 	|| dpkg-query -W -f '${Depends}\n${Pre-Depends}\n' $meta_kernels \
 	| sed -r -e 's/ \([^)]*\)//g' -e 's/,? (\| )?/\n/g' \
 	| sed -nr 's/^linux-(signed-)?image-(unsigned-)?([0-9]+\..+)/\3/p' \
+	| linux-version sort | uniq
+}
+
+# Get list of latest available kernel releases that installed meta kernels
+# depend on.
+# Note: Depends on Ubuntu's package naming policy
+get_latest_available_releases() {
+	local meta_kernels=$(get_meta_kernels)
+	[[ -z $meta_kernels ]] \
+	|| apt-cache depends -i $meta_kernels \
+	| sed -nr 's/^.*Depends: linux-(signed-)?image-(unsigned-)?([0-9]+\..+)/\3/p' \
 	| linux-version sort | uniq
 }
 
@@ -462,11 +474,12 @@ getReleasesToPurge() {
 	local -r title='Choose Which Kernels to Purge'
 	local -r height=$(($(tput lines)-6))
 	[[ $(tput cols) -lt $width ]] && error "$w_error"
-	local -r legend_text="Legend of Content On Right:
-* a plus sign (+), if the kernel is needed for updates
-* letter H, if the kernel is marked for hold
-* letter M, if the kernel is manually installed
-* the size of the kernel within /boot in megabytes
+	local -r legend_text="Legend of the content on the right:
+- asterisk (*): removing this will usually remove kernel metapackage
+- plus (+): removing this will usually upgrade kernel metapackage
+- letter H: the kernel is marked for hold
+- letter M: the kernel is installed manually
+- number: the size of the kernel within /boot in megabytes
 Hint: Space bar toggles item's selection."
 	local -r infotext="Booted kernel: $current \
 ($(get_release_size_boot $current) MB)
@@ -734,16 +747,22 @@ can not decide which kernels to keep." 3
 	if [[ $choose ]]; then
 		# Choose kernels interactively.
 
-		# create certain lists, if not done already
+		# These releases depend on available meta kernels;
+		# if you purge one, you will purge the meta kernel, too:
+		LatestAvailableReleases=$(get_latest_available_releases)
+		# Create certain lists, if not done already
+		[[ ${LatestReleases+x} ]] || LatestReleases=$(get_latest_releases)
 		[[ ${LatestReleases+x} ]] || LatestReleases=$(get_latest_releases)
 		[[ ${ManualReleases+x} ]] || ManualReleases=$(get_manual_releases)
 		[[ ${HoldReleases+x} ]] || HoldReleases=$(get_hold_releases)
 
-		Items="$(for release in $Releases; do
+		Items=$(for release in $Releases; do
 			if [[ $release != $current ]]; then
 				mark=
 				printf %s "$LatestReleases" | grep -Fxq -e "$release" &&
-				 mark+='+' || mark+='_'
+				 mark='+' || mark='_'
+				printf %s "$LatestAvailableReleases" | grep -Fxq -e "$release" &&
+				 mark='*' || :
 				printf %s "$HoldReleases" | grep -Fxq -e "$release" && mark+=H ||
 				 mark+='_'
 				printf %s "$ManualReleases" | grep -Fxq -e "$release" && mark+=M ||
@@ -753,7 +772,8 @@ can not decide which kernels to keep." 3
 				printf '%s %s%s%s %s ' "$release" "$mark" "$cs" \
 				 $(get_release_size_boot $release) $status
 			fi
-		done)"
+		done)
+
 		if [[ -z $Items ]]; then
 			note "No kernels to choose from. Just clear the junk..."
 			ReleasesToPurge=
