@@ -97,8 +97,10 @@ finnish() {
 	[[ $(<"$error_file") ]] && err=0
 	rm -- "$error_file"
 	restore_update_grub
-	[[ $debug_file ]] && note "The debug information is saved in
-${debug_file}"
+	[[ $debug_file ]] && {
+		[[ -s $debug_file ]] && note "The debug information is saved in
+${debug_file}" >&2 || rm -- "$debug_file"
+	}
 	[[ $err -eq 0 ]] \
 	 || error "Aborting due to an unknown error ($err)." 3 .
 }
@@ -108,17 +110,14 @@ ${debug_file}"
 trap finnish EXIT
 
 debug() {
-	[[ $debug_file ]] || debug_file=$(mktemp /tmp/linux-purge.debug_XXX)
-	touch -- "$debug_file" && [[ -w $debug_file ]] \
-	 || { debug_file=; error 'Can not write to the debug file.' 3; }
 	{
 		printf '## start time: '
-		LC_ALL=C date
+		date
 		printf '## linux-purge version: %s\n' $program_version
 		printf '## options: %s\n' "$params"
-		printf '## OS: %s\n' "$(lsb_release -d | cut -d$'\t' -f2)"
+		printf '## OS: %s\n' "$(lsb_release -ds)"
 		printf '## awk version:\n'
-		awk -W version
+		awk -W version 2>&1
 		printf '## linux packages:\n'
 		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' linux-'*'
 		printf '\n## trace and output:\n'
@@ -168,21 +167,23 @@ Options:
 					options determine which kernels are selected to
 					start with.
 	-d, -dFILE --debug, --debug=FILE
-					Store the command trace and some other debug information
-					in a given FILE. If FILE is not given, file matching
-					/tmp/linux-purge.debug_* is created. The file name is
-					shown in the output finally.
+					Store the command trace and some other debug
+					information in a given FILE. If FILE is not given,
+					file matching /tmp/linux-purge.debug_* is created.
+					The file name is shown in the output finally.
 	-f, --fix   	Use this, if the program fails otherwise. Try to fix
 					broken dependencies, which are typical in case a
-					filesystem has no space left. If needed, try to purge
-					given kernel(s) interactively by using different
-					methods to be able to purge kernels from a system
-					with broken dependencies and/or lack of free inodes.
+					filesystem has no space left. If needed, try to
+					purge given kernel(s) interactively by using
+					different methods to be able to purge kernels from
+					a system with broken dependencies and/or lack of
+					free inodes.
 	-h, --help  	Display this help and exit.
-	--info  		Show some kernel related information.
+	--info  		Show some kernel related information using less
+					utility.
 	-i APP, -iAPP, --interface APP, --interface=APP
-					Choose application used for generating user interface, when
-					selecting kernels; see option -c.
+					Choose application used for generating user
+					interface, when selecting kernels; see option -c.
 
 					Supported values for APP:
 
@@ -320,6 +321,8 @@ get_set_complement() {
 }
 
 get_info() {
+	trap 'exit 0' PIPE
+	printf 'Operating system: %s\n' "$(lsb_release -ds)"
 	printf 'Booted kernel: %s\n' "$current"
 	printf 'Size of the kernel (in /boot): %iMB\n'  "$(get_release_size_boot $current)"
 	printf 'Space used in /boot: %s\n' "$(du --summarize --block-size=MB /boot 2>/dev/null | cut -f1)"
@@ -329,23 +332,28 @@ get_info() {
 	printf 'Inode usage of /usr/src (including linux headers):\n'
 	df --inodes /usr/src
 
-	printf '\n'
-	local meta_kernels=$(get_meta_kernels)
+	printf '\n%s\n' 'Versioned Linux Packages in System:'
+	dpkg-query -W -f'${Package}\n' 'linux-*' \
+	 | grep -E '^linux-.*-[0-9]+\.[0-9]+\.[0-9]+' \
+	 | xargs dpkg --list | grep -v '^un '
+	echo 2>/dev/null
 
+	local meta_kernels=$(get_meta_kernels)
 	[[ $meta_kernels ]] || {
-		printf '%s\n' 'No meta kernels found.'; exit
+		printf '%s\n' 'WARNING: No meta kernels found.'
+		exit
 	}
 
-	declare -A avail
-	declare -r regex1=': linux-(signed-)?image-(unsigned-)*([[:digit:]]+\..*)'
+	local -A avail
+	local -r regex1=': linux-(signed-)?image-(unsigned-)*([[:digit:]]+\..*)'
 	while IFS= read -r line; do
 		[[ ${line:0:1} == l ]] && kernel=$line || {
 			[[ $line =~ $regex1 ]] && avail[$kernel]="${BASH_REMATCH[3]}"
 		}
 	done < <(apt-cache depends --important $meta_kernels)
 
-	declare -A inst_pkg inst
-	declare -r regex2='([^ ]*).* (linux-(signed-)?image-(unsigned-)?([[:digit:]]+\.[^, ]*))'
+	local -A inst_pkg inst
+	local -r regex2='([^ ]*).* (linux-(signed-)?image-(unsigned-)?([[:digit:]]+\.[^, ]*))'
 	while IFS= read -r line; do
 		[[ $line =~ $regex2 ]] && {
 			inst_pkg[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
@@ -353,27 +361,30 @@ get_info() {
 		}
 	done < <(dpkg-query -W -f '${Package} ${Depends} ${Pre-Depends}\n' $meta_kernels)
 
-	mapfile -t meta <<<"$meta_kernels"
+	local -a meta; mapfile -t meta <<<"$meta_kernels"
 
-	format='%-28s %-25s %-25s\n'
-	printf "$format" 'Installed Meta-Kernel:' \
-	'Current Available:' 'Installed:'
+	local -r format='%-28s %-25s %-25s\n'
+	printf "$format" 'Installed Meta-Kernel:' 'Currently Available:' 'Installed:'
 	for i in ${!meta[*]}; do
 		metapkg=${meta[$i]}
 		[[ -z ${inst[$metapkg]+x} && -z ${avail[$metapkg]+x} ]] && unset "meta[$i]" \
 		|| printf "$format" $metapkg  ${avail[$metapkg]-} \
 		${inst[$metapkg]-}
 	done
+	echo 2>/dev/null
+	local manual_meta=$(apt-cache rdepends --installed --important \
+	 --recurse $meta_kernels | grep -v -e '^Reverse Depends:' -e '^ ' \
+	 | sort -u | xargs apt-mark showmanual)
+	 local dependencies=
+	[[ $manual_meta ]] && {
+		printf '%s\n' 'Related Manually Installed Meta Packages:'
+		printf '%s\n' "$manual_meta"
+		dependencies=$(apt-cache depends --installed --important \
+		 $manual_meta | awk '$1 == "Depends:"{print $2}')
+	} || printf '%s\n' 'WARNING: No manually installed meta kernels found.'
 
-	printf '\n%s\n' 'Related Manually Installed Meta Packages:'
-	manual_meta=$(apt-cache rdepends --installed --important --recurse $meta_kernels \
-	| grep -v -e '^Reverse Depends:' -e '^ ' | sort -u | xargs apt-mark showmanual)
-	printf '%s\n\n' "$manual_meta"
-
-	printf 'dpkg Listing:\n'
-	dpkg --list $manual_meta "${meta[@]}" "${inst_pkg[@]}" \
-	$(awk -F - '{print "linux-headers-"$0 "\nlinux-headers-"$1"-"$2}' \
-	< <(printf '%s\n' "${inst[@]}"))
+	printf '\n%s\n' 'Respective Packages in System:'
+	dpkg --list $meta_kernels $manual_meta $dependencies
 }
 
 
@@ -877,7 +888,10 @@ while :; do
 			choose=1
 			;;
 		-d|--debug)
-			debug_file=$2
+			[[ $2 ]] && {
+				touch -- "$2" && [[ -w $2 ]] && debug_file=$2 \
+				|| error 'Can not write to the debug file.' 3
+			}
 			debug='debug'
 			shift
 			;;
@@ -934,8 +948,15 @@ while :; do
 	shift
 done
 
+[[ $# -eq 0 ]] || error "No argument allowed. ($1)" 1
+
+[[ $debug && -z $debug_file ]] \
+&& debug_file=$(mktemp $TMPDIR/linux-purge.debug_XXX)
+
 [[ $info ]] && {
-	$debug get_info
+	set -o pipefail
+	$debug get_info | less --no-init --quit-on-intr --quit-if-one-screen
+	set +o pipefail
 	exit
 }
 
@@ -949,8 +970,6 @@ fi
  [[ $fix && ($keep || $manual || $choose || $yes || $optimize) ]] &&
   error "Invalid combination of options. Hint:
   $program_name -h" 1
-
-[[ $# -eq 0 ]] || error "No argument \"$1\" allowed." 1
 
 # Ensure superuser privileges, if required
 [[ -z $simulate && $EUID -ne 0 ]] &&

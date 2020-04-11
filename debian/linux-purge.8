@@ -37,28 +37,30 @@ options determine which kernels are selected to
 start with.
 .TP
 \fB\-d\fR, \fB\-dFILE\fR \fB\-\-debug\fR, \fB\-\-debug\fR=\fI\,FILE\/\fR
-Store the command trace and some other debug information
-in a given FILE. If FILE is not given, file matching
-\fI\,/tmp/linux\-purge\/\fP.debug_* is created. The file name is
-shown in the output finally.
+Store the command trace and some other debug
+information in a given FILE. If FILE is not given,
+file matching \fI\,/tmp/linux\-purge\/\fP.debug_* is created.
+The file name is shown in the output finally.
 .TP
 \fB\-f\fR, \fB\-\-fix\fR
 Use this, if the program fails otherwise. Try to fix
 broken dependencies, which are typical in case a
-filesystem has no space left. If needed, try to purge
-given kernel(s) interactively by using different
-methods to be able to purge kernels from a system
-with broken dependencies and/or lack of free inodes.
+filesystem has no space left. If needed, try to
+purge given kernel(s) interactively by using
+different methods to be able to purge kernels from
+a system with broken dependencies and/or lack of
+free inodes.
 .TP
 \fB\-h\fR, \fB\-\-help\fR
 Display this help and exit.
 .TP
 \fB\-\-info\fR
-Show some kernel related information.
+Show some kernel related information using less
+utility.
 .TP
 \fB\-i\fR APP, \fB\-iAPP\fR, \fB\-\-interface\fR APP, \fB\-\-interface\fR=\fI\,APP\/\fR
-Choose application used for generating user interface, when
-selecting kernels; see option \fB\-c\fR.
+Choose application used for generating user
+interface, when selecting kernels; see option \fB\-c\fR.
 .IP
 Supported values for APP:
 .IP
