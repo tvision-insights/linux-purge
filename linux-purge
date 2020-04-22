@@ -94,6 +94,7 @@ restore_update_grub() {
 
 finnish() {
 	err=$?
+	set +o pipefail
 	[[ $(<"$error_file") ]] && err=0
 	rm -- "$error_file"
 	restore_update_grub
@@ -321,7 +322,6 @@ get_set_complement() {
 }
 
 get_info() {
-	trap 'exit 0' PIPE
 	printf 'Operating system: %s\n' "$(lsb_release -ds)"
 	printf 'Booted kernel: %s\n' "$current"
 	printf 'Size of the kernel (in /boot): %iMB\n'  "$(get_release_size_boot $current)"
@@ -336,8 +336,7 @@ get_info() {
 	dpkg-query -W -f'${Package}\n' 'linux-*' \
 	 | grep -E '^linux-.*-[0-9]+\.[0-9]+\.[0-9]+' \
 	 | xargs dpkg --list | grep -v '^un '
-	echo 2>/dev/null
-
+	echo
 	local meta_kernels=$(get_meta_kernels)
 	[[ $meta_kernels ]] || {
 		printf '%s\n' 'WARNING: No meta kernels found.'
@@ -371,7 +370,7 @@ get_info() {
 		|| printf "$format" $metapkg  ${avail[$metapkg]-} \
 		${inst[$metapkg]-}
 	done
-	echo 2>/dev/null
+	echo
 	local manual_meta=$(apt-cache rdepends --installed --important \
 	 --recurse $meta_kernels | grep -v -e '^Reverse Depends:' -e '^ ' \
 	 | sort -u | xargs apt-mark showmanual)
@@ -387,7 +386,16 @@ get_info() {
 	dpkg --list $meta_kernels $manual_meta $dependencies
 }
 
-
+get_info_with_broken_pipe_handling() {
+	# without '& wait $!' error 141 would not be handled below
+	# (GNU bash, version 4.4.20(1)-release)
+	{ get_info & wait $!; } || {
+		local exit_code=$?
+		# suppress broken pipe error (141)
+		((exit_code == 141)) && warn "User quitted operation before \
+the output was completed." || return $exit_code
+	}
+}
 
 # Delete extra initrd.img backups (LP: #1515513)
 remove_extra_initrds() {
@@ -955,9 +963,9 @@ done
 
 [[ $info ]] && {
 	set -o pipefail
-	$debug get_info | less --no-init --quit-on-intr --quit-if-one-screen
-	set +o pipefail
-	exit
+	$debug get_info_with_broken_pipe_handling \
+	| less --no-init --quit-on-intr --quit-if-one-screen
+	exit 0
 }
 
 if [[ $keep ]]; then
