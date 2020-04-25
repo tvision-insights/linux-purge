@@ -180,8 +180,7 @@ Options:
 					a system with broken dependencies and/or lack of
 					free inodes.
 	-h, --help  	Display this help and exit.
-	--info  		Show some kernel related information using less
-					utility.
+	--info  		Show some kernel related information using pager.
 	-i APP, -iAPP, --interface APP, --interface=APP
 					Choose application used for generating user
 					interface, when selecting kernels; see option -c.
@@ -964,7 +963,7 @@ done
 [[ $info ]] && {
 	set -o pipefail
 	$debug get_info_with_broken_pipe_handling \
-	| less --no-init --quit-on-intr --quit-if-one-screen
+	| pager --no-init --quit-on-intr --quit-if-one-screen
 	exit 0
 }
 
