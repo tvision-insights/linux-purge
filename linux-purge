@@ -206,12 +206,6 @@ Options:
 	-v, --version   Print version.
 	-y, --yes   	Purge without user confirmation.
 
-Exit Status:
-	0:  Command finished successfully.
-	1:  Command-line is invalid.
-	2:  Command was run with wrong privileges.
-	other integer:  Command failed for some other reason.
-
 Report bugs at: <https://bugs.launchpad.net/linux-purge/+filebug>
 Use --debug option and attach the generated file.
 Launchpad home page: <https://launchpad.net/linux-purge>
