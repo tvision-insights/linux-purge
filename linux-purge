@@ -390,6 +390,15 @@ the output was completed." || return $exit_code
 	}
 }
 
+run_pager() {
+	local pager=$(readlink -e $(command -v pager))
+	case ${pager##*/} in
+		less) "$pager" --no-init --quit-on-intr --quit-if-one-screen \
+--chop-long-lines -- "$@" ;;
+		*) "$pager" -- "$@"
+	esac
+}
+
 # Delete extra initrd.img backups (LP: #1515513)
 remove_extra_initrds() {
 	# First remove possible leftover temporary mkinitramfs files
@@ -956,8 +965,7 @@ done
 
 [[ $info ]] && {
 	set -o pipefail
-	$debug get_info_with_broken_pipe_handling \
-	| pager --no-init --quit-on-intr --quit-if-one-screen
+	$debug get_info_with_broken_pipe_handling | run_pager
 	exit 0
 }
 
