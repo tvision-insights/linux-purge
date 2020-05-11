@@ -866,7 +866,6 @@ operate() {
 # Main program
 
 # Handle command line options
-
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null ||
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
 # This should not happen with util-linux's getopt.
@@ -876,7 +875,7 @@ optimize,remove,simulate,version,yes --name "[$program_name] ERROR" -- "$@") \
 || {
 	err_code=$?
 	case $err_code in
-		1) error_called=1; exit 1 ;;
+		1) echo 1 >"$error_file"; exit 1 ;;
 		*) error "getopt exited with error code $err_code" 3
 	esac
 }
@@ -954,7 +953,7 @@ while :; do
 	shift
 done
 
-[[ $# -eq 0 ]] || error "No argument allowed. ($1)" 1
+[[ $# -eq 0 ]] || error "No operand allowed. ($1)" 1
 
 [[ $debug && -z $debug_file ]] \
 && debug_file=$(mktemp $TMPDIR/linux-purge.debug_XXX)
