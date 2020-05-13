@@ -44,7 +44,7 @@ current=$(uname -r) \
 boot=$(stat  --format="%m" /boot) # = mount point under which /boot is found
 readonly cs=';' # column separator used for dialog command. Will be displayed
 # as is with whiptail command. It should not contain space.
-readonly error_file=$(mktemp)
+readonly error_file=$(mktemp $TMPDIR/linux-purge.error_XXX)
 
 # Default values for command line options:
 keep= # explicit keep option not detected
