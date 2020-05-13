@@ -114,8 +114,11 @@ ${debug_file}" >&2
 	}
 
 	[[ ${1:-null} == INT ]] && note 'Interupted' >&2 \
-	 || [[ $err -eq 0 ]] \
-	  || error "Aborting due to an unknown error ($err)." 3 .
+	 || if (( err != 0 && err != 141 )); then
+			error "Aborting due to an unknown error ($err)." 3 .
+		fi
+		# did not display an error message about broken pipe (141)
+	return 0
 }
 
 # NOTE: in case of power cut this will not be done and update-grub may
@@ -324,6 +327,8 @@ get_set_complement() {
 }
 
 get_info() {
+	[[ $debug ]] \
+	 && trap 'trap - PIPE; warn "Quitted prematurely."; return 141' PIPE
 	printf 'Operating system: %s\n' "$(lsb_release -ds)"
 	printf 'Booted kernel: %s\n' "$current"
 	printf 'Size of the kernel (in /boot): %iMB\n'  "$(get_release_size_boot $current)"
@@ -388,17 +393,6 @@ get_info() {
 	dpkg --list $meta_kernels $manual_meta $dependencies
 }
 
-get_info_with_broken_pipe_handling() {
-	# without '& wait $!' error 141 would not be handled below
-	# (GNU bash, version 4.4.20(1)-release)
-	{ get_info & wait $!; } || {
-		local exit_code=$?
-		# suppress broken pipe error (141)
-		((exit_code == 141)) && warn "User quitted operation before \
-the output was completed." || return $exit_code
-	}
-}
-
 run_pager() {
 	local pager=$(readlink -e $(command -v pager))
 	case ${pager##*/} in
@@ -410,7 +404,7 @@ run_pager() {
 
 show_info() {
 	set -o pipefail
-	$debug get_info_with_broken_pipe_handling | run_pager
+	$debug get_info | run_pager
 	set +o pipefail
 }
 
