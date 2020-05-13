@@ -95,6 +95,7 @@ restore_update_grub() {
 
 finnish() {
 	err=$?
+	trap - EXIT
 	set +o pipefail
 	[[ $(<"$error_file") ]] && err=0
 	rm -- "$error_file"
@@ -111,13 +112,16 @@ finnish() {
 ${debug_file}" >&2
 		fi
 	}
-	[[ $err -eq 0 ]] \
-	 || error "Aborting due to an unknown error ($err)." 3 .
+
+	[[ ${1:-null} == INT ]] && note 'Interupted' >&2 \
+	 || [[ $err -eq 0 ]] \
+	  || error "Aborting due to an unknown error ($err)." 3 .
 }
 
 # NOTE: in case of power cut this will not be done and update-grub may
 # be left non-executable!
 trap finnish EXIT
+trap 'finnish INT; trap - INT; kill -s INT -- $$' INT
 
 debug() {
 	{
