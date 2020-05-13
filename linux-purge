@@ -53,6 +53,7 @@ clear_boot= # Do not clear system from files unknown to dpkg.
 choose= # Do not let user choose kernels to purge interactively.
 debug= # not debug mode
 debug_file=
+show_debug_filename= # do not show debug filename
 fix= # do not fix
 info= # do not show info
 simulate= # no simulation
@@ -99,8 +100,16 @@ finnish() {
 	rm -- "$error_file"
 	restore_update_grub
 	[[ $debug_file ]] && {
-		[[ -s $debug_file ]] && note "The debug information is saved in
-${debug_file}" >&2 || rm -- "$debug_file"
+		if [[ -f $debug_file && ! -s $debug_file ]]; then
+			# remove empty regular file
+			rm -- "$debug_file"
+		else
+			[[ ${SUDO_UID:+x} ]] \
+			 && chown "$SUDO_UID:$SUDO_UID" "$debug_file"
+			[[ $show_debug_filename ]] \
+			 && note "The debug information is saved in
+${debug_file}" >&2
+		fi
 	}
 	[[ $err -eq 0 ]] \
 	 || error "Aborting due to an unknown error ($err)." 3 .
@@ -162,13 +171,13 @@ Options:
  -b, --clear-boot	  Check /boot for kernels unknown to the package
 					  management system, and if such files are found,
 					  offer to remove them.
- -c, --choose         Choose interactively which kernels to purge.  Other
+ -c, --choose         Choose interactively which kernels to purge. Other
 					  options determine which kernels are selected to
 					  start with.
- -d, --debug[=FILE]   Store the command trace and some other debug
-					  information in a given FILE. If FILE is not given,
-					  a file in tmpfs is created. The file name is shown
-					  in stderr finally.
+ -d, --debug[=FILE]   Write the command trace and some other debug
+					  information in the given FILE. If FILE is not
+					  given, a file in a tmpfs is created and the name
+					  is shown in stderr finally.
  -f, --fix            Use this, if the program fails otherwise. Try to
 					  fix broken dependencies, which are typical in case
 					  a filesystem has no space left. If needed, try to
@@ -956,7 +965,10 @@ done
 [[ $# -eq 0 ]] || error "No operand allowed. ($1)" 1
 
 [[ $debug && -z $debug_file ]] \
-&& debug_file=$(mktemp $TMPDIR/linux-purge.debug_XXX)
+&& {
+	debug_file=$(mktemp $TMPDIR/linux-purge.debug_XXX)
+	show_debug_filename=1
+}
 
 [[ $info ]] && {
 	set -o pipefail
