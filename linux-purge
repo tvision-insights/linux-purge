@@ -408,6 +408,12 @@ run_pager() {
 	esac
 }
 
+show_info() {
+	set -o pipefail
+	$debug get_info_with_broken_pipe_handling | run_pager
+	set +o pipefail
+}
+
 # Delete extra initrd.img backups (LP: #1515513)
 remove_extra_initrds() {
 	# First remove possible leftover temporary mkinitramfs files
@@ -975,8 +981,7 @@ done
 }
 
 [[ $info ]] && {
-	set -o pipefail
-	$debug get_info_with_broken_pipe_handling | run_pager
+	show_info
 	exit 0
 }
 
