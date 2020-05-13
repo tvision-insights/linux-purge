@@ -516,7 +516,7 @@ getReleasesToPurge() {
 	eval $(resize)
 	local -r title='Choose Which Kernels to '${operation^}
 	local -r height=$(($(tput lines)-6))
-	[[ $(tput cols) -lt $width ]] && error "$w_error" 3
+	[[ $(tput cols) -lt $width ]] && error "$w_error" 2
 	local -r legend_text="Legend of the content on the right:
 - asterisk (*): removing this will usually remove kernel metapackage
 - plus (+): removing this will usually upgrade kernel metapackage
@@ -531,7 +531,7 @@ Free space on /boot: $(avail_boot) MB$([[ $boot != '/boot' ]] &&
 $([[ $legend ]] && printf %s "$legend_text")"
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	local -r listheight=$((height-infolines-6))
-	[[ $listheight -lt 1 ]] && error "$h_error" 3
+	[[ $listheight -lt 1 ]] && error "$h_error" 2
 	if [[ $interface = d ]]; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=1 DIALOG_ERROR=11
 		dialog --title "$title" --stdout --keep-tite --separate-output \
@@ -552,13 +552,13 @@ $([[ $legend ]] && printf %s "$legend_text")"
 getVersionToPurge() {
 	eval $(resize)
 	local -r height=$(($(tput lines)-6))
-	[[ $(tput cols) -lt $width ]] && error "$w_error" 3
+	[[ $(tput cols) -lt $width ]] && error "$w_error" 2
 	local -r title='Choose Which Linux Kernel to '${operation^}
 	local -r infotext='The program purges the chosen kernel in
 a special way due to lack of free inodes.'
 	local -r infolines=$((1+$(printf %s "$infotext" | wc -l)))
 	local -r listheight=$((height-infolines-6))
-	[[ $listheight -lt 1 ]] && error "$h_error" 3
+	[[ $listheight -lt 1 ]] && error "$h_error" 2
 	if [[ $interface = d ]]; then
 		export DIALOG_OK=0 DIALOG_CANCEL=1 DIALOG_ESC=1 DIALOG_ERROR=11
 		dialog --title "$title" --backtitle "$program_full_name" --keep-tite \
@@ -575,7 +575,7 @@ free_some_inodes() {
 	local varmp=$(stat --format="%m" /var)
 	local usrmp=$(stat --format="%m"  /usr/src)
 	[[ $varmp != $usrmp ]] &&
-	 error "Too few inodes on the filesystem mounted at $varmp." 3
+	 error "Too few inodes on the filesystem mounted at $varmp."
 	# Try freeing some inodes by removing some files from /usr/src.
 	# Prompt for one kernel to remove, if there are many to choose from.
 	local HeaderVersions=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
@@ -595,7 +595,7 @@ free_some_inodes() {
 		  okVersions+="$version "
 	done
 	okVersions=${okVersions%% }
-	[[ $okVersions ]] || error 'No suitable version to purge.' 3
+	[[ $okVersions ]] || error 'No suitable version to purge.'
 	[[ $(printf %s "$okVersions" | wc -w) == 1 ]] && version=$okVersions ||
 	 version=$(getVersionToPurge "$okVersions") || exit $?
 
@@ -611,7 +611,7 @@ free_some_inodes() {
 	dpkg --$operation --abort-after=1 $simulate \
 	$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
 	 awk '/^.i  linux-.+-'"$(escape_regex ${version})"'(-.*)?$/{print $2}') || {
-		error "Purging by dpkg failed; dpkg error $?." 3
+		error "Purging by dpkg failed; dpkg error $?."
 		# NOTE: some packages may have selection state
 		# "purge" after this.
 	}
@@ -636,7 +636,7 @@ purge_manually() {
 
 	okReleases=${okReleases%% }
 
-	[[ $okReleases ]] || error 'Could not find a safe kernel to purge.' 3
+	[[ $okReleases ]] || error 'Could not find a safe kernel to purge.'
 
 	# Choose kernel(s) interactively.
 	local ReleasesToPurge
@@ -655,7 +655,7 @@ purge_manually() {
 			 $(get_release_size_boot $release) off
 		 done)") || exit $?
 		[[ $ReleasesToPurge ]] ||
-			error 'You should have chosen at least one release.' 3
+			error 'You should have chosen at least one release.' 2
 	}
 	for release in $ReleasesToPurge; do
 		note 'Removing matching initrd image. (LP: #1678187)'
@@ -664,7 +664,7 @@ purge_manually() {
 		dpkg --$operation --abort-after=1 $simulate \
 			$(dpkg-query -W -f='${Package}\n' |
 			awk '/^linux-.+-'"$(escape_regex $release)"'$/') ||
-				error "dpkg failed; dpkg error $?." 3
+				error "dpkg failed; dpkg error $?."
 				# NOTE: some packages may have selection state "purge".
 		[[ $simulate ]] ||
 		 dpkg --$operation \
@@ -707,8 +707,8 @@ why this happened. Select action accordingly below:"
 			case $answer in
 			 1) purge_manually ;;
 			 2) dpkg --configure -a $simulate \
-				|| error "'dpkg --configure -a' failed and returned $?" 3 ;;
-			 3) error 'Could not fix the problem.' 3 ;;
+				|| error "'dpkg --configure -a' failed and returned $?" ;;
+			 3) error 'Could not fix the problem.' ;;
 			 *) printf '%s\n' 'Invalid selection'; continue ;;
 			esac
 			break # break while true
@@ -732,7 +732,7 @@ purge_normally() {
 		error "Current kernel release $current is not successfully \
 installed or it is marked for removal according to the package manager. \
 Please install the kernel, or if you can not do so, please run this command \
-with --fix option." 3
+with --fix option."
 	fi
 
 	# Create list of unsuccessfully/partially installed packages.
@@ -748,7 +748,7 @@ $Pkgs
 
 Hint: Run this command with --fix option.
 Hint: If a package flag is 'reinst-required' (instead of 'ok') for some package, \
-you may have to reinstall the package by 'apt-get install --reinstall'." 3
+you may have to reinstall the package by 'apt-get install --reinstall'."
 	fi
 
 	# get list of succesfully installed wanted releses
@@ -772,7 +772,7 @@ you may have to reinstall the package by 'apt-get install --reinstall'." 3
 		ReleasesToKeep=
 		LatestReleases=$(get_latest_releases)
 		[[ $LatestReleases ]] || error "There are no meta-kernels so \
-can not decide which kernels to keep." 3
+can not decide which kernels to keep."
 		for release in $LatestReleases; do
 			[[ $ReleasesToKeep ]] && ReleasesToKeep+=$'\n'
 			ReleasesToKeep+=$(printf %s "$Releases" |
@@ -866,7 +866,7 @@ can not decide which kernels to keep." 3
 			[[ err_code -eq 1 ]] && exit 0 # User aborted
 			[[ $update_grub_disabled ]] && run_update_grub
 			error "apt-get failed; apt-get error $err_code.
-Hint: try running the command with --fix option." 3
+Hint: try running the command with --fix option."
 		}
 		[[ $update_grub_disabled ]] && run_update_grub
 	fi
@@ -886,7 +886,7 @@ operate() {
 
 # Handle command line options
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null ||
-[[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 3
+[[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 4
 # This should not happen with util-linux's getopt.
 params=$(env -u GETOPT_COMPATIBLE getopt -o abcd::fhi:k:mnosrvy -l auto-only,\
 clear-boot,choose,debug::,fix,help,info,interface:,keep:,manual,no-legend,\
@@ -894,8 +894,8 @@ optimize,remove,simulate,version,yes --name "[$program_name] ERROR" -- "$@") \
 || {
 	err_code=$?
 	case $err_code in
-		1) echo 1 >"$error_file"; exit 1 ;;
-		*) error "getopt exited with error code $err_code" 3
+		1) echo 1 >"$error_file"; exit 2 ;;
+		*) error "getopt exited with error code $err_code" 4
 	esac
 }
 
@@ -914,7 +914,7 @@ while :; do
 		-d|--debug)
 			[[ $2 ]] && {
 				touch -- "$2" && [[ -w $2 ]] && debug_file=$2 \
-				|| error 'Can not write to the debug file.' 3
+				|| error 'Can not write to the debug file.' 2
 			}
 			debug='debug'
 			shift
@@ -933,7 +933,7 @@ while :; do
 			case $2 in
 			 w|whiptail) interface=w ;;
 			 d|dialog) interface=d ;;
-			 *) error "'$2' is invalid interface ID." 1
+			 *) error "'$2' is invalid interface ID." 2
 			esac
 			shift
 			;;
@@ -972,7 +972,7 @@ while :; do
 	shift
 done
 
-[[ $# -eq 0 ]] || error "No operand allowed. ($1)" 1
+[[ $# -eq 0 ]] || error "No operand allowed. ($1)" 2
 
 [[ $debug && -z $debug_file ]] \
 && {
@@ -987,14 +987,14 @@ done
 
 if [[ $keep ]]; then
 	[[ "$n" =~ ^[0-9]+$ ]] ||
-	error "'$n' is invalid number of older kernels to keep." 1
+	error "'$n' is invalid number of older kernels to keep." 2
 fi
 # $n is valid number, if needed
 
 [[ $auto_only && ! $keep ]] || [[ $keep && $manual ]] ||
  [[ $fix && ($keep || $manual || $choose || $yes || $optimize) ]] &&
   error "Invalid combination of options. Hint:
-  $program_name -h" 1
+  $program_name -h" 2
 
 # Ensure superuser privileges, if required
 [[ -z $simulate && $EUID -ne 0 ]] &&
