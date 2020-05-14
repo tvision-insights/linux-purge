@@ -842,10 +842,14 @@ can not decide which kernels to keep."
 
 		[[ $simulate ]] || {
 			remove_extra_initrds
-			cmd=$(fuser -v "$lockfile" 2>&1 | awk 'NR == 2{print $5}')
-			[[ $cmd ]] && {
-				note "Waiting for $cmd to finish..."
+			locked=$(fuser -v "$lockfile" 2>&1 | awk 'NR == 2{print $3, $5}')
+			# locked contains process id and command name of the process
+			# locking dpkg.
+			[[ $locked ]] && {
+				date
+				note "Waiting for process ${locked%% *} (${locked#* }) to finish..."
 				while fuser "$lockfile" &>/dev/null; do sleep 1; done
+				date
 			}
 
 			# disable update-grub; restore after purging has finished.
