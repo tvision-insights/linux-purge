@@ -96,7 +96,6 @@ restore_update_grub() {
 finish() {
 	err=$?
 	trap - EXIT
-	set +o pipefail
 	[[ $(<"$error_file") ]] && err=0
 	rm -- "$error_file"
 	restore_update_grub
@@ -114,10 +113,9 @@ ${debug_file}" >&2
 	}
 
 	[[ ${1:-null} == INT ]] && note 'Interupted' >&2 \
-	 || if (( err != 0 && err != 141 )); then
+	 || if (( err != 0 )); then
 			error "Aborting due to an unknown error ($err)." 3 .
 		fi
-		# did not display an error message about broken pipe (141)
 	return 0
 }
 
@@ -327,8 +325,6 @@ get_set_complement() {
 }
 
 get_info() {
-	[[ $debug ]] \
-	 && trap 'trap - PIPE; warn "Quitted prematurely."; return 141' PIPE
 	printf 'Operating system: %s\n' "$(lsb_release -ds)"
 	printf 'Booted kernel: %s\n' "$current"
 	printf 'Size of the kernel (in /boot): %iMB\n'  "$(get_release_size_boot $current)"
@@ -378,6 +374,7 @@ get_info() {
 		${inst[$metapkg]-}
 	done
 	echo
+
 	local manual_meta=$(apt-cache rdepends --installed --important \
 	 --recurse $meta_kernels | grep -v -e '^Reverse Depends:' -e '^ ' \
 	 | sort -u | xargs apt-mark showmanual)
@@ -402,11 +399,27 @@ run_pager() {
 	esac
 }
 
-show_info() {
-	set -o pipefail
-	$debug get_info | run_pager
-	set +o pipefail
+# Effectively runs '$1 | $2', but there will no be broken pipe error
+# or PIPE signal, if $2 quits before $1.
+# If exit status of $2 is non-zero, exit status of this function is exit
+# status of $2; otherwise it is the same as normal pipe would have.
+entire_pipe() {
+	( set -m; (
+		trap 'exit 0' INT
+		echo $BASHPID
+		$1
+	) & wait $! ) |
+	(
+		trap 'trap - EXIT; kill -s INT -- -$pid 2>/dev/null || :' EXIT
+		read -r pid
+		$2
+	)
 }
+
+show_info() (
+	set -o pipefail
+	entire_pipe get_info run_pager
+)
 
 # Delete extra initrd.img backups (LP: #1515513)
 remove_extra_initrds() {
@@ -979,7 +992,7 @@ done
 }
 
 [[ $info ]] && {
-	show_info
+	$debug show_info
 	exit 0
 }
 
