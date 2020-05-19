@@ -93,7 +93,7 @@ restore_update_grub() {
 	fi
 }
 
-finnish() {
+finish() {
 	err=$?
 	trap - EXIT
 	set +o pipefail
@@ -123,8 +123,8 @@ ${debug_file}" >&2
 
 # NOTE: in case of power cut this will not be done and update-grub may
 # be left non-executable!
-trap finnish EXIT
-trap 'finnish INT; trap - INT; kill -s INT -- $$' INT
+trap finish EXIT
+trap 'finish INT; trap - INT; kill -s INT -- $$' INT
 
 debug() {
 	{
