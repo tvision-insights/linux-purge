@@ -126,6 +126,7 @@ trap finish EXIT
 trap 'finish INT; trap - INT; kill -s INT -- $$' INT
 
 debug() {
+	PS4='+ $FUNCNAME() $LINENO: '
 	{
 		printf '## start time: '
 		date
