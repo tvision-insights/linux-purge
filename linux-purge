@@ -112,10 +112,11 @@ ${debug_file}" >&2
 		fi
 	}
 
-	[[ ${1:-null} == INT ]] && note 'Interupted' >&2 \
-	 || if (( err != 0 )); then
-			error "Aborting due to an unknown error ($err)." 3 .
-		fi
+	if [[ ${1:-null} == INT ]]; then note 'Interupted' >&2
+	elif (( err != 0 && err != 141 )); then
+		error "Aborting due to an unknown error ($err)." 3 .
+	fi
+
 	return 0
 }
 
