@@ -60,6 +60,7 @@ simulate= # no simulation
 yes= # interactive mode
 manual= # do not mark manually installed for purge
 legend=1 # display legend in checklist by default
+list=
 optimize= # Do not optimize by default
 interface=d
 operation=purge
@@ -156,6 +157,8 @@ show_help() {
 # Convert tabs by 4 spaces in the here document.
 printf "Usage: $program_name [-borsy] [-c [-n] [-i APP]] \
 [-k NUM [-a] | -m] [-d[FILE]]
+or: $program_name --list [-r] [-c [-n] [-i APP]] [-k NUM [-a] | -m] \
+[-d[FILE]]
 or: $program_name --fix [-bnrs] [-i APP] [-d[FILE]]
 or: $program_name {--help | --version | --info [-d[FILE]]}
 
@@ -205,6 +208,10 @@ Options:
  -k, --keep=NUM       Keep NUM latest kernels that have earlier version
 					  and same flavour than each kernel a meta-kernel
 					  (such as linux-image-generic) depends on.
+ -l, --list           Only output the packages that would be purged (or
+					  removed, if -r was used). The list may not be
+					  complete, as there may be some packages depending
+					  on those.
  -m, --manual         Purge kernels that have been marked as being
 					  manually installed.
  -n, --no-legend      Do not display legend in checklist with options
@@ -829,7 +836,7 @@ can not decide which kernels to keep."
 		done)
 
 		if [[ -z $Items ]]; then
-			note "No kernels to choose from. Just clear the junk..."
+			note 'No kernels to choose from.' >&2
 			ReleasesToPurge=
 		else
 			ReleasesToPurge=$(getReleasesToPurge "$Items") || { err_code=$?
@@ -852,6 +859,16 @@ can not decide which kernels to keep."
 	PkgsToPurge=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
 	 awk '/^.[^n]  linux-.+-[0-9]+\.[0-9]+\./{print $2}' | {
 	  grep -Evf <(printf '%s' "$KeepRegex") || [[ $? -eq 1 ]]; })
+
+	if [[ $operation == remove ]]; then
+		PkgsToPurge=$(dpkg-query -W -f'${db:Status-Abbrev} ${Package}\n' \
+		$PkgsToPurge | awk '$1 != "rc"{print $2}')
+	fi
+
+	if [[ $list ]]; then
+		echo $PkgsToPurge | tr ' ' $'\n'
+		exit 0
+	fi
 
 	if [[ $PkgsToPurge ]]; then
 
@@ -901,9 +918,10 @@ operate() {
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null ||
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 4
 # This should not happen with util-linux's getopt.
-params=$(env -u GETOPT_COMPATIBLE getopt -o abcd::fhi:k:mnosrvy -l auto-only,\
-clear-boot,choose,debug::,fix,help,info,interface:,keep:,manual,no-legend,\
-optimize,remove,simulate,version,yes --name "[$program_name] ERROR" -- "$@") \
+params=$(env -u GETOPT_COMPATIBLE getopt -o abcd::fhi:k:lmnosrvy -l \
+auto-only,clear-boot,choose,debug::,fix,help,info,interface:,keep:,\
+list,manual,no-legend,optimize,remove,simulate,version,yes --name \
+"[$program_name] ERROR" -- "$@") \
 || {
 	err_code=$?
 	case $err_code in
@@ -929,15 +947,13 @@ while :; do
 				touch -- "$2" && [[ -w $2 ]] && debug_file=$2 \
 				|| error 'Can not write to the debug file.' 2
 			}
-			debug='debug'
-			shift
+			debug='debug'; shift
 			;;
 		 -f|--fix)
 			fix=1
 			;;
 		-h|--help)
-			show_help
-			exit
+			show_help; exit
 			;;
 		--info)
 			info=1
@@ -951,9 +967,10 @@ while :; do
 			shift
 			;;
 		-k|--keep)
-			keep=1
-			n=$2
-			shift
+			keep=1; n=$2; shift
+			;;
+		-l|--list)
+			list=1;	simulate=1
 			;;
 		-m|--manual)
 			manual=1
@@ -971,15 +988,13 @@ while :; do
 			simulate='--simulate'
 			;;
 		-v|--version)
-			show_version
-			exit
+			show_version; exit
 			;;
 		-y|--yes)
 			yes='-y'
 			;;
 		--) # End of all options.
-			shift
-			break
+			shift; break
 	esac
 
 	shift
@@ -1004,8 +1019,9 @@ if [[ $keep ]]; then
 fi
 # $n is valid number, if needed
 
-[[ $auto_only && ! $keep ]] || [[ $keep && $manual ]] ||
- [[ $fix && ($keep || $manual || $choose || $yes || $optimize) ]] &&
+[[ $auto_only && ! $keep ]] || [[ $keep && $manual ]] || [[ $fix && \
+($keep || $manual || $choose || $yes || $optimize || $list) ]] \
+|| [[ $list && $clear_boot ]] &&
   error "Invalid combination of options. Hint:
   $program_name -h" 2
 
@@ -1023,7 +1039,7 @@ error "Must be run as root, if not in simulation mode. Hint:
 [[ $interface = d ]] && {
 	hash dialog 2>/dev/null || {
 		interface=w
-		note 'Using whiptail, if needed, because dialog is not installed.'
+		warn 'Using whiptail, if needed, because dialog is not installed.'
 	}
 }
 

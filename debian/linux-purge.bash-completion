@@ -9,8 +9,8 @@ _linux-purge()
 	_init_completion -s || return
 
 	# DEFINE OPTIONS THAT DO NOT TAKE AN ARGUMENT HERE:
-	opts=(auto-only clear-boot choose fix help info manual no-legend \
-optimize remove simulate version yes debug)
+	opts=(auto-only clear-boot choose fix help info list manual \
+no-legend optimize remove simulate version yes debug)
 	# DEFINE THE OPTIONS WITH ARGUMENTS HERE:
 	args=([debug]= [interface]=$'dialog\nwhiptail' [keep]=$(seq 0 9))
 
