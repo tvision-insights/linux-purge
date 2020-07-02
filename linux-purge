@@ -133,9 +133,10 @@ debug() {
 		date
 		printf '## linux-purge version: %s\n' $program_version
 		printf '## options: %s\n' "$params"
-		printf '## OS: %s\n' "$(lsb_release -ds)"
+		printf '## OS: '; lsb_release -ds
+		printf '## awk executable: '; realpath -e $(command -v awk)
 		printf '## awk version:\n'
-		awk -W version 2>&1
+		awk -Wversion --version 2>&1
 		printf '## linux packages:\n'
 		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' linux-'*'
 		printf '\n## trace and output:\n'
@@ -400,7 +401,7 @@ get_info() {
 }
 
 run_pager() {
-	local pager=$(readlink -e $(command -v pager))
+	local pager=$(realpath -e $(command -v pager))
 	case ${pager##*/} in
 		less) "$pager" --no-init --quit-on-intr --quit-if-one-screen \
 --chop-long-lines -- "$@" ;;
