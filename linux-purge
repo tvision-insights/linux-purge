@@ -476,7 +476,7 @@ remove_extra_initrds() {
 # http://askubuntu.com/a/779077/21005
 clear_boot() {
 	local ReleasesKnownToDpkg=$(dpkg-query -W -f='${Package}\n' |
-	sed -nr "s/linux-image-([0-9]+\..+)/\1/p")
+	sed -nr 's/linux-image-([0-9]+\..+)/\1/p')
 	local ReleasesOnBoot=$(ls /boot/vmlinuz-* |
 	 sed -nr -e 's#\.efi\.signed$##' -e 's#/boot/vmlinuz-([0-9]+\..+)#\1#p' |
 	  { grep -vFx "$current" || [[ $? -eq 1 ]]; })
@@ -596,7 +596,7 @@ free_some_inodes() {
 	# Try freeing some inodes by removing some files from /usr/src.
 	# Prompt for one kernel to remove, if there are many to choose from.
 	local HeaderVersions=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
-	sed -rn "s/^.i  linux-headers-([0-9.]+(-[^-]+)?)$/\1/p" | linux-version sort)
+	sed -rn 's/^.i  linux-headers-([0-9.]+(-[^-]+)?)$/\1/p' | linux-version sort)
 	HeaderVersions=$(get_set_complement "$HeaderVersions" \
 	"$(printf '%s\n' \
 	 $(get_latest_releases | cut -d'-' -f1,2) \
@@ -639,7 +639,7 @@ purge_manually() {
 	# Restrict to releases that have related linux packages "ok".
 	local release version flavour okReleases=
 	InstalledReleases=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' \
-	| sed -nr "s/^.i  linux-image-(unsigned-)?([0-9]+\..+)/\2/p" \
+	| sed -nr 's/^.i  linux-image-(unsigned-)?([0-9]+\..+)/\2/p' \
 	| linux-version sort)
 	for release in $(get_set_complement "$InstalledReleases" \
 	"$(printf '%s\n' $(get_latest_releases) $current)"); do
@@ -770,7 +770,7 @@ you may have to reinstall the package by 'apt-get install --reinstall'."
 
 	# get list of succesfully installed wanted releses
 	Releases=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
-	 sed -nr "s/^[ih]i  linux-image-(unsigned-)?([0-9]+\..+)/\2/p" | linux-version sort)
+	 sed -nr 's/^[ih]i  linux-image-(unsigned-)?([0-9]+\..+)/\2/p' | linux-version sort)
 
 	[[ $clear_boot ]] && clear_boot
 
