@@ -241,10 +241,10 @@ There is NO WARRANTY, to the extent permitted by law.
 Written by Jarno Ilari Suni.\n"
 }
 
-# Escape special characters.
-# reference: http://unix.stackexchange.com/a/209744/111181
-escape_regex() {
-	printf %s "$1" | sed 's/[.[\*^$()+?{|]/\\&/g'
+# Make fixed string safe to use as part of regular expression, not
+# within a character class though.
+literalize() {
+	printf '%s' "$1" | sed -e 's/[^^]/[&]/g' -e 's/\^/\\^/g'
 }
 
 # Print megabytes availabe on /boot
@@ -498,12 +498,12 @@ clear_boot() {
 					# check, if also files without the flavour part can be
 					# removed
 					dpkg-query -W -f='${Package}\n' |
-					awk '(match($0,"-'"$(escape_regex "$version" |
+					awk '(match($0,"-'"$(literalize "$version" |
 					 sed 's/\\/\\\\/g')"'-.*") &&
 					  substr($0,RSTART,RLENGTH)!=r){exit 1}' r=$release &&
-					  regex="-$(escape_regex "$version")(-$(escape_regex \
+					  regex="-$(literalize "$version")(-$(literalize \
 					   "$flavour"))?$" ||
-					   regex="-$(escape_regex "$release")$"
+					   regex="-$(literalize "$release")$"
 					# You could run updatedb here, but suppose it was run after
 					# the system has been installed already.
 					if [[ $simulate ]]; then
@@ -608,7 +608,7 @@ free_some_inodes() {
 	local version okVersions=
 	for version in $HeaderVersions; do
 		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
-		 grep -qE '^..[^ ] linux-.+-'"$(escape_regex $version)"'(-.*)?$' ||
+		 grep -qE '^..[^ ] linux-.+-'"$(literalize $version)"'(-.*)?$' ||
 		  okVersions+="$version "
 	done
 	okVersions=${okVersions%% }
@@ -627,7 +627,7 @@ free_some_inodes() {
 	note "Purging the kernel by dpkg ..."
 	dpkg --$operation --abort-after=1 $simulate \
 	$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
-	 awk '/^.i  linux-.+-'"$(escape_regex ${version})"'(-.*)?$/{print $2}') || {
+	 awk '/^.i  linux-.+-'"$(literalize ${version})"'(-.*)?$/{print $2}') || {
 		error "Purging by dpkg failed; dpkg error $?."
 		# NOTE: some packages may have selection state
 		# "purge" after this.
@@ -646,8 +646,8 @@ purge_manually() {
 		version=$(printf %s "$release" | cut -d- -f1,2)
 		flavour=$(printf %s "$release" | cut -s -d- -f3-)
 		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' \
-		 | grep -qE '^..[^ ] linux-.+-'"$(escape_regex $version)"\
-'(-'"$(escape_regex $flavour)"')?$' \
+		 | grep -qE '^..[^ ] linux-.+-'"$(literalize $version)"\
+'(-'"$(literalize $flavour)"')?$' \
 		  || okReleases+="$release "
 	done
 
@@ -680,13 +680,13 @@ purge_manually() {
 		note 'Deleting the kernel by dpkg ...'
 		dpkg --$operation --abort-after=1 $simulate \
 			$(dpkg-query -W -f='${Package}\n' |
-			awk '/^linux-.+-'"$(escape_regex $release)"'$/') ||
+			awk '/^linux-.+-'"$(literalize $release)"'$/') ||
 				error "dpkg failed; dpkg error $?."
 				# NOTE: some packages may have selection state "purge".
 		[[ $simulate ]] ||
 		 dpkg --$operation \
 		  $(dpkg-query -W -f='${Package}\n' |
-		  awk '/^linux-.+-'"$(escape_regex $(printf %s $release |
+		  awk '/^linux-.+-'"$(literalize $(printf %s $release |
 		   cut -d- -f1,2))"'$/') 2>/dev/null || true
 		# If purging linux-.+-<version> fails
 		# due to linux-.+-<version>-<flavour> being
@@ -744,7 +744,7 @@ more versioned kernel packages."
 
 purge_normally() {
 	if ! $(dpkg-query -W -f='${Package} ${db:Status-Abbrev}\n' \
-	 | grep -qE '^linux-image-(unsigned-)?'"$(escape_regex $current)"\
+	 | grep -qE '^linux-image-(unsigned-)?'"$(literalize $current)"\
 ' [ih]i $'); then
 		error "Current kernel release $current is not successfully \
 installed or it is marked for removal according to the package manager. \
@@ -853,7 +853,7 @@ can not decide which kernels to keep."
 	KeepRegex=
 	for release in $ReleasesToKeep; do
 		[[ $KeepRegex ]] && KeepRegex+=$'\n'
-		KeepRegex+='-'$(escape_regex "$release" |
+		KeepRegex+='-'$(literalize "$release" |
 		 sed -nr 's/^([^-]+(-[^-]+)?)(-.*)?/\1(\3)?/p')'$'
 	done
 
