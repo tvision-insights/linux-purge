@@ -497,7 +497,7 @@ clear_boot() {
 					flavour=$(printf %s "$release" | cut -s -d- -f3-)
 					# check, if also files without the flavour part can be
 					# removed
-					dpkg-query -W -f='${Package}\n' |
+					dpkg-query -W -f='${Package}\n' 2>/dev/null |
 					awk '(match($0,"-'"$(literalize "$version" |
 					 sed 's/\\/\\\\/g')"'-.*") &&
 					  substr($0,RSTART,RLENGTH)!=r){exit 1}' r=$release &&
@@ -607,7 +607,7 @@ free_some_inodes() {
 	# Restrict to versions that have related linux packages "ok".
 	local version okVersions=
 	for version in $HeaderVersions; do
-		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
+		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 2>/dev/null |
 		 grep -qE '^..[^ ] linux-.+-'"$(literalize $version)"'(-.*)?$' ||
 		  okVersions+="$version "
 	done
@@ -645,7 +645,7 @@ purge_manually() {
 	"$(printf '%s\n' $(get_latest_releases) $current)"); do
 		version=$(printf %s "$release" | cut -d- -f1,2)
 		flavour=$(printf %s "$release" | cut -s -d- -f3-)
-		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' \
+		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 2>/dev/null \
 		 | grep -qE '^..[^ ] linux-.+-'"$(literalize $version)"\
 '(-'"$(literalize $flavour)"')?$' \
 		  || okReleases+="$release "
@@ -743,7 +743,7 @@ more versioned kernel packages."
 }
 
 purge_normally() {
-	if ! $(dpkg-query -W -f='${Package} ${db:Status-Abbrev}\n' \
+	if ! $(dpkg-query -W -f='${Package} ${db:Status-Abbrev}\n' 2>/dev/null \
 	 | grep -qE '^linux-image-(unsigned-)?'"$(literalize $current)"\
 ' [ih]i $'); then
 		error "Current kernel release $current is not successfully \
