@@ -10,6 +10,7 @@ set -o errexit
 }
 
 rm -vf /usr/local/bin/linux-purge
+rm -vf /usr/local/bin/update-linux-purge
 
 rm -vf /etc/bash_completion.d/linux-purge
 rm -vf /usr/share/bash-completion/completions/linux-purge
