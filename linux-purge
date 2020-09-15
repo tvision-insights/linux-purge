@@ -33,7 +33,7 @@ export TMPDIR=/dev/shm # set mktemp use tmpfs filesystem by default
 
 readonly program_name='linux-purge' \
 program_full_name='Linux Purge for Ubuntu' \
-program_version=1.0.115-a520d70 \
+program_version=1.0.117-5932e90 \
 copyright_years='2017-2020' \
 MB=1000000 \
 width=72
