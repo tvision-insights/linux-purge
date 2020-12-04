@@ -179,7 +179,7 @@ Options:
 
  -a, --auto-only      Only purge kernels that have been marked as being
 					  automatically installed.
- -b, --clear-boot	  Check /boot for kernels unknown to the package
+ -b, --clear-boot     Check /boot for kernels unknown to the package
 					  management system, and if such files are found,
 					  offer to remove them.
  -c, --choose         Choose interactively which kernels to purge. Other
@@ -218,6 +218,10 @@ Options:
  -n, --no-legend      Do not display legend in checklist with options
 					  --choose and --fix.
  -o, --optimize       Run update-grub only once in normal operation.
+					  IMPORTANT: If linux-purge gets killed when this
+					  option is used, updage-grub may be left
+					  non-executable! In that case you can run
+					  linux-purge again to enable update-grub.
  -r, --remove         Remove packages instead of purging them.
  -s, --simulate       Dry-run; do not actually remove packages. You may
 					  run this as regular user. Note that in some cases
