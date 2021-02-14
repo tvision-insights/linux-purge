@@ -819,7 +819,6 @@ can not decide which kernels to keep."
 		LatestAvailableReleases=$(get_latest_available_releases)
 		# Create certain lists, if not done already
 		[[ ${LatestReleases+x} ]] || LatestReleases=$(get_latest_releases)
-		[[ ${LatestReleases+x} ]] || LatestReleases=$(get_latest_releases)
 		[[ ${ManualReleases+x} ]] || ManualReleases=$(get_manual_releases)
 		[[ ${HoldReleases+x} ]] || HoldReleases=$(get_hold_releases)
 
