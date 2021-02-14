@@ -341,9 +341,10 @@ get_set_complement() {
 get_info() {
 	printf 'Operating system: %s\n' "$(lsb_release -ds)"
 	printf 'Booted kernel: %s\n' "$current"
-	printf 'Size of the kernel (in /boot): %iMB\n'  "$(get_release_size_boot $current)"
-	printf 'Space used in /boot: %s\n' "$(du --summarize --block-size=MB /boot 2>/dev/null | cut -f1)"
-	printf 'Free space in /boot: %iMB (for superuser)\n' "$(avail_boot)"
+	printf 'Size of the kernel (in /boot): %i MB\n'  "$(get_release_size_boot $current)"
+	printf 'Space used in /boot: %s MB\n' "$(du --summarize \
+	--block-size=MB /boot 2>/dev/null | cut -f1 -dM)"
+	printf 'Free space in /boot: %i MB (for superuser)\n' "$(avail_boot)"
 	printf 'Mount point of /boot directory: %s\n' "$boot"
 	printf '\n'
 	printf 'Inode usage of /usr/src (including linux headers):\n'
