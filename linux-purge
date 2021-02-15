@@ -369,13 +369,10 @@ get_info() {
 		}
 	done < <(apt-cache depends --important $meta_kernels)
 
-	local -A inst_pkg inst
+	local -A inst
 	local -r regex2='([^ ]*).* (linux-(signed-)?image-(unsigned-)?([[:digit:]]+\.[^, ]*))'
 	while IFS= read -r line; do
-		[[ $line =~ $regex2 ]] && {
-			inst_pkg[${BASH_REMATCH[1]}]=${BASH_REMATCH[2]}
-			inst[${BASH_REMATCH[1]}]=${BASH_REMATCH[5]}
-		}
+		[[ $line =~ $regex2 ]] && inst[${BASH_REMATCH[1]}]=${BASH_REMATCH[5]}
 	done < <(dpkg-query -W -f '${Package} ${Depends} ${Pre-Depends}\n' $meta_kernels)
 
 	local -a meta; mapfile -t meta <<<"$meta_kernels"
@@ -385,8 +382,7 @@ get_info() {
 	for i in ${!meta[*]}; do
 		metapkg=${meta[$i]}
 		[[ -z ${inst[$metapkg]+x} && -z ${avail[$metapkg]+x} ]] && unset "meta[$i]" \
-		|| printf "$format" $metapkg  ${avail[$metapkg]-} \
-		${inst[$metapkg]-}
+		|| printf "$format" $metapkg ${avail[$metapkg]-} ${inst[$metapkg]-}
 	done
 	echo
 
