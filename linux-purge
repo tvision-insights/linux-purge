@@ -484,6 +484,8 @@ clear_boot() {
 	local UnknownReleases=$(get_set_complement "$ReleasesOnBoot" \
 	 "$ReleasesKnownToDpkg")
 	[[ $UnknownReleases ]] && {
+		[[ $simulate ]] && note 'Assume updatedb has been run.' \
+		 || { note 'Updating database for locate.'; updatedb; }
 		[[ $yes ]] \
 		&& note "About to remove kernel related files unknown to \
 package management system under certain system directories." \
@@ -505,8 +507,6 @@ files; answer e.g. n to skip."
 			  substr($0,RSTART+1)!=r){exit 1}' r=$release &&
 			  regex="-$lversion($(literalize "$minus_flavour"))?$" ||
 			   regex="-$(literalize "$release")$"
-			# You could run updatedb here, but suppose it was run after
-			# the system has been installed already.
 			if [[ $simulate ]]; then
 				locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
 				 xargs -0 printf "Would remove %s\n"
