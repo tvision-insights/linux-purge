@@ -491,19 +491,18 @@ clear_boot() {
 			read -r response &&
 			[[ ${response,,} =~ ^(y|$) ]] ;} && {
 				# restrict removing to these directories:
-				local release version flavour regex
+				local release version minus_flavour regex
 				local -r rdirs='^/(boot|lib|usr|var)/'
 				for release in $UnknownReleases; do
 					version=$(printf %s "$release" | cut -d- -f1,2)
-					flavour=$(printf %s "$release" | cut -s -d- -f3-)
+					minus_flavour=${release:${#version}}
 					# check, if also files without the flavour part can be
 					# removed
+					local lversion=$(literalize "$version")
 					dpkg-query -W -f='${Package}\n' 2>/dev/null |
-					awk '(match($0,"-'"$(literalize "$version" |
-					 sed 's/\\/\\\\/g')"'-.*") &&
-					  substr($0,RSTART,RLENGTH)!=r){exit 1}' r=$release &&
-					  regex="-$(literalize "$version")(-$(literalize \
-					   "$flavour"))?$" ||
+					awk '(match($0,/-'"$lversion"'-.*/) &&
+					  substr($0,RSTART+1)!=r){exit 1}' r=$release &&
+					  regex="-$lversion($(literalize "$minus_flavour"))?$" ||
 					   regex="-$(literalize "$release")$"
 					# You could run updatedb here, but suppose it was run after
 					# the system has been installed already.
@@ -638,17 +637,17 @@ free_some_inodes() {
 
 purge_manually() {
 	# Restrict to releases that have related linux packages "ok".
-	local release version flavour okReleases=
+	local InstalledReleases release version minus_flavour okReleases=
 	InstalledReleases=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' \
 	| sed -nr 's/^.i  linux-image-(unsigned-)?([0-9]+\..+)/\2/p' \
 	| linux-version sort)
 	for release in $(get_set_complement "$InstalledReleases" \
 	"$(printf '%s\n' $(get_latest_releases) $current)"); do
 		version=$(printf %s "$release" | cut -d- -f1,2)
-		flavour=$(printf %s "$release" | cut -s -d- -f3-)
+		minus_flavour=${release:${#version}}
 		dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 2>/dev/null \
 		 | grep -qE '^..[^ ] linux-.+-'"$(literalize $version)"\
-'(-'"$(literalize $flavour)"')?$' \
+'('"$(literalize $minus_flavour)"')?$' \
 		  || okReleases+="$release "
 	done
 
@@ -744,6 +743,9 @@ more versioned kernel packages."
 }
 
 purge_normally() {
+	local Pkgs Releases ReleasesToKeep LatestReleases HoldReleases \
+	ManualReleases release Items ReleasesToPurge KeepRegex version \
+	PkgsToPurge locked version minus_flavour
 	if ! $(dpkg-query -W -f='${Package} ${db:Status-Abbrev}\n' 2>/dev/null \
 	 | grep -qE '^linux-image-(unsigned-)?'"$(literalize $current)"\
 ' [ih]i $'); then
@@ -853,10 +855,10 @@ can not decide which kernels to keep."
 	KeepRegex=
 	for release in $ReleasesToKeep; do
 		[[ $KeepRegex ]] && KeepRegex+=$'\n'
-		# Suppose release does not contain '^' character.
 		# Keep kernel packages with and without the flavor.
-		KeepRegex+='-'$(literalize "$release" | sed -nr \
-		 's/^((\[[^-]\])+(\[-\](\[[^-]\])+)?)(\[-\].*)?/\1(\5)?/p')'$'
+		version=$(printf %s "$release" | cut -d- -f1,2)
+		minus_flavour=${release:${#version}}
+		KeepRegex+='-'$(literalize "$version")'('$(literalize "$minus_flavour")')?$'
 	done
 
 	PkgsToPurge=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
