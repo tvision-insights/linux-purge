@@ -484,42 +484,38 @@ clear_boot() {
 	local UnknownReleases=$(get_set_complement "$ReleasesOnBoot" \
 	 "$ReleasesKnownToDpkg")
 	[[ $UnknownReleases ]] && {
-		[[ $yes ]] && note "Removing files unknown to package management:" || {
-			printf 'There are some kernel files unknown to package management system in /boot:
-%s\nContinue to removing the files and also respective files elsewhere in system? [Y/n] : ' \
-"$(ls /boot | grep -f <(printf %s "$UnknownReleases"))"
-			read -r response &&
-			[[ ${response,,} =~ ^(y|$) ]] ;} && {
-				# restrict removing to these directories:
-				local release version minus_flavour regex
-				local -r rdirs='^/(boot|lib|usr|var)/'
-				for release in $UnknownReleases; do
-					version=$(printf %s "$release" | cut -d- -f1,2)
-					minus_flavour=${release:${#version}}
-					# check, if also files without the flavour part can be
-					# removed
-					local lversion=$(literalize "$version")
-					dpkg-query -W -f='${Package}\n' 2>/dev/null |
-					awk '(match($0,/-'"$lversion"'-.*/) &&
-					  substr($0,RSTART+1)!=r){exit 1}' r=$release &&
-					  regex="-$lversion($(literalize "$minus_flavour"))?$" ||
-					   regex="-$(literalize "$release")$"
-					# You could run updatedb here, but suppose it was run after
-					# the system has been installed already.
-					if [[ $simulate ]]; then
-						locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
-						 xargs -0 $([[ $yes ]] || printf %s '-p') \
-						  printf "Would remove %s\n"
-					else
-						[[ $yes ]] && note "Removing files matching extended \
-regular expression
-$rdirs.*$regex" || note "Answer y to remove the files."
-						locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
-						 xargs -0 $([[ $yes ]] || printf %s '-p') rm -rf
-					fi
-				done
-				[[ $update_grub ]] && $update_grub
-			}
+		[[ $yes ]] \
+		&& note "About to remove kernel related files unknown to \
+package management system under certain system directories." \
+		|| note "Some kernel files are unknown to package management \
+system in /boot and maybe in certain other system directories. You \
+will be prompted to remove the files. Answer y or Y to remove given \
+files; answer e.g. n to skip."
+		local release version minus_flavour regex
+		# restrict removing to these directories:
+		local -r rdirs='^/(boot|lib|usr|var)/'
+		for release in $UnknownReleases; do
+			version=$(printf %s "$release" | cut -d- -f1,2)
+			minus_flavour=${release:${#version}}
+			# check, if also files without the flavour part can be
+			# removed
+			local lversion=$(literalize "$version")
+			dpkg-query -W -f='${Package}\n' 2>/dev/null |
+			awk '(match($0,/-'"$lversion"'-.*/) &&
+			  substr($0,RSTART+1)!=r){exit 1}' r=$release &&
+			  regex="-$lversion($(literalize "$minus_flavour"))?$" ||
+			   regex="-$(literalize "$release")$"
+			# You could run updatedb here, but suppose it was run after
+			# the system has been installed already.
+			if [[ $simulate ]]; then
+				locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
+				 xargs -0 printf "Would remove %s\n"
+			else
+				locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
+				 xargs -0 $([[ $yes ]] || printf %s '-p') rm -rfv
+			fi
+		done
+		[[ $update_grub ]] && $update_grub
 	}
 	:
 }
