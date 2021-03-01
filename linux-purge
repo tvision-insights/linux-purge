@@ -434,12 +434,12 @@ show_info() (
 )
 
 # Delete extra initrd.img backups (LP: #1515513)
-remove_extra_initrds() {
+remove_extra_initrds() (
 	# First remove possible leftover temporary mkinitramfs files
 	# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=814345
 	rm -rfv ${TMPDIR:-/var/tmp}/mkinitramfs-*
 
-	local old_dir release='' response=''; old_dir=$(pwd)
+	local release='' response=''
 	cd /boot
 	# Assume filenames at /boot are nice i.e. do not contain newline etc.
 	local initrd_releases; initrd_releases=$(ls initrd.img-* |
@@ -474,8 +474,8 @@ remove_extra_initrds() {
 			read -r response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
 		rm -v $extra_backups
 	}
-	cd "$old_dir"
-}
+	:
+)
 
 # Handle possible kernel files unknown to the package management system.
 # http://askubuntu.com/a/779077/21005
