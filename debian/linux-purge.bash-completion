@@ -1,35 +1,63 @@
 _linux-purge()
 {
-	local IFS=$'\n' # needed for handling trailing space of some options and all arguments
-	local cur prev words cword split # needed by _init_completion()
-	local opts args opt i prefix= wordlist
-	local -A args
+	local IFS=$'\n' # needed for handling trailing space of some options
+	# and all arguments.
+	# Declare some locals that will be assigned by by _init_completion():
+	local cur prev cword split
+	local -a words
 	# Do not treat = as word breaks even if they are in $COMP_WORDBREAKS:
 	# Split option=value into option in $prev and value in $cur
 	_init_completion -s || return
 
 	# DEFINE OPTIONS THAT DO NOT TAKE AN ARGUMENT HERE:
-	opts=(auto-only clear-boot choose fix help info list manual \
-no-legend optimize remove simulate version yes debug)
-	# DEFINE THE OPTIONS WITH ARGUMENTS HERE:
-	args=([debug]= [interface]=$'dialog\nwhiptail' [keep]=$(seq 0 9))
+	local -ar opts=(
+auto-only
+clear-boot
+choose
+debug
+fix
+help
+info
+list
+manual
+no-legend
+optimize
+remove
+simulate
+version
+yes
+	)
+
+	# DEFINE OPTIONS WITH ARGUMENTS HERE:
+	local -Ar args=(
+[debug]=''
+[interface]=$'dialog\nwhiptail'
+[keep]=$(seq 0 9)
+	)
+
+	local i j dobreak prefix='' set_prefix=
+	[[ "$COMP_WORDBREAKS" != *=* && $split == true ]] && set_prefix=t
 
 	for i in ${!args[*]}; do
 		if [[ $prev = --$i ]]; then
-			local j dobreak=
+			dobreak=
 			[[ $split == false ]] && {
 				# equal sign not used; check, if argument is optional.
-				for j in ${opts[*]}; do [[ $i == $j ]] && { dobreak=t; break; } done
+				for j in ${opts[*]}; do 
+					[[ $i == "$j" ]] && { dobreak=t; break; }
+				done
 			}
 			[[ $dobreak ]] && break
 
-			[[ "$COMP_WORDBREAKS" != *=* && $split == true ]] && prefix="--$i="
+			[[ $set_prefix ]] && prefix="--$i="
 			if [[ ${args[$i]} ]]; then
-				COMPREPLY=( $( compgen -P "$prefix" -W "${args[$i]}" -- "$cur" ) )
+				COMPREPLY=( $( compgen -P "$prefix" -W "${args[$i]}" \
+-- "$cur" ) )
 			else
 				case $i in
 					debug)
-						COMPREPLY=( $( compgen -P "$prefix" -A file -- "$cur" ) )
+						COMPREPLY=( $( compgen -P "$prefix" -A file -- \
+"$cur" ) )
 						compopt -o filenames ;;
 				esac
 			fi
@@ -37,7 +65,7 @@ no-legend optimize remove simulate version yes debug)
 		fi
 	done
 
-	wordlist=()
+	local -a wordlist=()
 	for i in ${opts[*]}; do wordlist+=("--$i "); done
 	for i in ${!args[*]}; do wordlist+=("--$i="); done
 	COMPREPLY=( $( compgen -W "${wordlist[*]}" -- "$cur" ) )

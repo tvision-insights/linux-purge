@@ -75,7 +75,7 @@ unset -v LatestReleases ManualReleases HoldReleases
 error() {
 	printf '[%s] ERROR: %s\n' "$program_name" "$1" | fold -s >&2
 	[[ ${3+x} ]] || echo 1 >"$error_file"
-	exit ${2:-1}
+	exit "${2:-1}"
 }
 
 warn() {
@@ -134,7 +134,7 @@ debug() {
 		printf '## linux-purge version: %s\n' $program_version
 		printf '## options: %s\n' "$params"
 		printf '## OS: '; lsb_release -ds
-		printf '## awk executable: '; realpath -e $(command -v awk)
+		printf '## awk executable: '; realpath -e "$(command -v awk)"
 		printf '## awk version:\n'
 		awk -Wversion --version 2>&1
 		printf '## linux packages:\n'
@@ -156,10 +156,9 @@ run_update_grub() {
 # Usage info
 show_help() {
 # Convert tabs by 4 spaces in the here document.
-printf "Usage: $program_name [-borsy] [-c [-n] [-i APP]] \
-[-k NUM [-a] | -m] [-d[FILE]]
-or: $program_name --list [-r] [-c [-n] [-i APP]] [-k NUM [-a] | -m] \
-[-d[FILE]]
+sed 's/\t/    /g' <<EOF
+Usage: $program_name [-borsy] [-c [-n] [-i APP]] [-k NUM [-a] | -m] [-d[FILE]]
+or: $program_name --list [-r] [-c [-n] [-i APP]] [-k NUM [-a] | -m] [-d[FILE]]
 or: $program_name --fix [-bnrs] [-i APP] [-d[FILE]]
 or: $program_name {--help | --version | --info [-d[FILE]]}
 
@@ -170,7 +169,7 @@ kernel packages that have the respective linux-image package missing
 or marked for removal or purge, and packages that have just
 configuration files remaining. Does not purge such versioned kernel
 packages that have respective successfully installed linux-image
-package marked with \"hold\" unless chosen interactively with --choose
+package marked with "hold" unless chosen interactively with --choose
 option.
 
 If usual purging fails, using --fix option may help.
@@ -232,17 +231,19 @@ Options:
 
 Report bugs at: <https://bugs.launchpad.net/linux-purge/+filebug>
 Use --debug option and attach the generated file.
-Launchpad home page: <https://launchpad.net/linux-purge>\n" |
-sed 's/\t/    /g'
+Launchpad home page: <https://launchpad.net/linux-purge>
+EOF
 }
 
 show_version() {
-printf "$program_name ($program_full_name) $program_version
+cat <<EOF
+$program_name ($program_full_name) $program_version
 Copyright (C) $copyright_years Jarno Ilari Suni
 License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.
-Written by Jarno Ilari Suni.\n"
+Written by Jarno Ilari Suni.
+EOF
 }
 
 # Make fixed string safe to use as part of regular expression, not
@@ -264,6 +265,7 @@ get_release_size_boot() {
 
 # Get comprehensive list of meta kernel packages that may depend on kernels
 # Note: Depends on Ubuntu's package naming policy
+# Returns zero, if some meta kernel is found; otherwise returns non-zero.
 get_meta_kernels() {
 	dpkg-query -W -f '${db:Status-Abbrev} ${Package}\n' \
 	| awk '/^[ih].. linux-(.+-)?image-/{print $2}' \
@@ -274,9 +276,8 @@ get_meta_kernels() {
 # depend on.
 # Note: Depends on Ubuntu's package naming policy
 get_latest_releases() {
-	local meta_kernels=$(get_meta_kernels)
-	[[ -z $meta_kernels ]] \
-	|| dpkg-query -W -f '${Depends}\n${Pre-Depends}\n' $meta_kernels \
+	local meta_kernels; meta_kernels=$(get_meta_kernels) \
+	&& dpkg-query -W -f '${Depends}\n${Pre-Depends}\n' $meta_kernels \
 	| sed -r -e 's/ \([^)]*\)//g' -e 's/,? (\| )?/\n/g' \
 	| sed -nr 's/^linux-(signed-)?image-(unsigned-)?([0-9]+\..+)/\3/p' \
 	| linux-version sort | uniq
@@ -286,9 +287,8 @@ get_latest_releases() {
 # depend on.
 # Note: Depends on Ubuntu's package naming policy
 get_latest_available_releases() {
-	local meta_kernels=$(get_meta_kernels)
-	[[ -z $meta_kernels ]] \
-	|| apt-cache depends -i $meta_kernels \
+	local meta_kernels; meta_kernels=$(get_meta_kernels) \
+	&& apt-cache depends -i $meta_kernels \
 	| sed -nr 's/^.*Depends: linux-(signed-)?image-(unsigned-)?([0-9]+\..+)/\3/p' \
 	| linux-version sort | uniq
 }
@@ -355,8 +355,8 @@ get_info() {
 	 | grep -E '^linux-.*-[0-9]+\.[0-9]+\.[0-9]+' \
 	 | xargs dpkg --list | grep -v '^un '
 	echo
-	local meta_kernels=$(get_meta_kernels)
-	[[ $meta_kernels ]] || {
+	local meta_kernels
+	meta_kernels=$(get_meta_kernels) || {
 		printf '%s\n' 'WARNING: No meta kernels found.'
 		exit
 	}
@@ -386,10 +386,11 @@ get_info() {
 	done
 	echo
 
-	local manual_meta=$(apt-cache rdepends --installed --important \
+	local manual_meta
+	manual_meta=$(apt-cache rdepends --installed --important \
 	 --recurse $meta_kernels | grep -v -e '^Reverse Depends:' -e '^ ' \
 	 | sort -u | xargs apt-mark showmanual)
-	 local dependencies=
+	local dependencies=
 	[[ $manual_meta ]] && {
 		printf '%s\n' 'Related Manually Installed Meta Packages:'
 		printf '%s\n' "$manual_meta"
@@ -402,7 +403,7 @@ get_info() {
 }
 
 run_pager() {
-	local pager=$(realpath -e $(command -v pager))
+	local pager; pager=$(realpath -e "$(command -v pager)")
 	case ${pager##*/} in
 		less) "$pager" --no-init --quit-on-intr --quit-if-one-screen \
 --chop-long-lines -- "$@" ;;
@@ -438,13 +439,15 @@ remove_extra_initrds() {
 	# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=814345
 	rm -rfv ${TMPDIR:-/var/tmp}/mkinitramfs-*
 
-	local old_dir=$(pwd) release= response=
+	local old_dir release='' response=''; old_dir=$(pwd)
 	cd /boot
-	local initrd_releases=$(ls initrd.img-* |
+	# Assume filenames at /boot are nice i.e. do not contain newline etc.
+	local initrd_releases; initrd_releases=$(ls initrd.img-* |
 	 sed -r -e '/.*\.old-dkms$/d' -e '/.*\.bak$/d' -e 's/initrd\.img-(.*)/\1/')
-	local vmlinuz_releases=$(ls vmlinuz-* | sed -nr -e 's#\.efi\.signed$##' \
+	local vmlinuz_releases
+	vmlinuz_releases=$(ls vmlinuz-* | sed -nr -e 's#\.efi\.signed$##' \
 	-e 's#^vmlinuz-(.*)#\1#p')
-	local extra_initrds=$(for release in \
+	local extra_initrds; extra_initrds=$(for release in \
 	$(get_set_complement "$initrd_releases" "$vmlinuz_releases"); do
 	 echo initrd.img-${release}
 	done)
@@ -455,9 +458,11 @@ remove_extra_initrds() {
 			read -r response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
 		rm -v $extra_initrds
 	}
-	local initrd_backup_releases=$(ls initrd.img-*.old-dkms initrd.img-*.bak 2>/dev/null |
+	local initrd_backup_releases
+	initrd_backup_releases=$(ls initrd.img-*.old-dkms initrd.img-*.bak 2>/dev/null |
 	 sed -r 's/initrd\.img-(.*)\.(old-dkms|bak)$/\1/')
-	local extra_backups=$(for release in \
+	local extra_backups
+	extra_backups=$(for release in \
 	$(get_set_complement "$initrd_backup_releases" "$initrd_releases"); do
 	 echo initrd.img-${release}.*
 	done)
@@ -469,19 +474,20 @@ remove_extra_initrds() {
 			read -r response && [[ ${response,,} =~ ^(y|$) ]] ;} &&
 		rm -v $extra_backups
 	}
-
 	cd "$old_dir"
 }
 
 # Handle possible kernel files unknown to the package management system.
 # http://askubuntu.com/a/779077/21005
 clear_boot() {
-	local ReleasesKnownToDpkg=$(dpkg-query -W -f='${Package}\n' |
+	local ReleasesKnownToDpkg ReleasesOnBoot UnknownReleases
+	ReleasesKnownToDpkg=$(dpkg-query -W -f='${Package}\n' |
 	sed -nr 's/linux-image-([0-9]+\..+)/\1/p')
-	local ReleasesOnBoot=$(ls /boot/vmlinuz-* |
+	# Assume filenames at /boot are nice i.e. do not contain newline etc.
+	ReleasesOnBoot=$(ls /boot/vmlinuz-* |
 	 sed -nr -e 's#\.efi\.signed$##' -e 's#/boot/vmlinuz-([0-9]+\..+)#\1#p' |
 	  { grep -vFx "$current" || [[ $? -eq 1 ]]; })
-	local UnknownReleases=$(get_set_complement "$ReleasesOnBoot" \
+	UnknownReleases=$(get_set_complement "$ReleasesOnBoot" \
 	 "$ReleasesKnownToDpkg")
 	[[ $UnknownReleases ]] && {
 		[[ $simulate ]] && note 'Assume updatedb has been run.' \
@@ -493,7 +499,7 @@ package management system under certain system directories." \
 system in /boot and maybe in certain other system directories. You \
 will be prompted to remove the files. Answer y or Y to remove given \
 files; answer e.g. n to skip."
-		local release version minus_flavour regex
+		local release version minus_flavour lversion regex
 		# restrict removing to these directories:
 		local -r rdirs='^/(boot|lib|usr|var)/'
 		for release in $UnknownReleases; do
@@ -501,7 +507,7 @@ files; answer e.g. n to skip."
 			minus_flavour=${release:${#version}}
 			# check, if also files without the flavour part can be
 			# removed
-			local lversion=$(literalize "$version")
+			lversion=$(literalize "$version")
 			dpkg-query -W -f='${Package}\n' 2>/dev/null |
 			awk '(match($0,/-'"$lversion"'-.*/) &&
 			  substr($0,RSTART+1)!=r){exit 1}' r=$release &&
@@ -585,13 +591,15 @@ a special way due to lack of free inodes.'
 }
 
 free_some_inodes() {
-	local varmp=$(stat --format="%m" /var)
-	local usrmp=$(stat --format="%m"  /usr/src)
-	[[ $varmp != $usrmp ]] &&
+	local varmp usrmp
+	varmp=$(stat --format="%m" /var)
+	usrmp=$(stat --format="%m"  /usr/src)
+	[[ $varmp != "$usrmp" ]] &&
 	 error "Too few inodes on the filesystem mounted at $varmp."
 	# Try freeing some inodes by removing some files from /usr/src.
 	# Prompt for one kernel to remove, if there are many to choose from.
-	local HeaderVersions=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
+	local HeaderVersions
+	HeaderVersions=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
 	sed -rn 's/^.i  linux-headers-([0-9.]+(-[^-]+)?)$/\1/p' | linux-version sort)
 	HeaderVersions=$(get_set_complement "$HeaderVersions" \
 	"$(printf '%s\n' \
@@ -613,8 +621,8 @@ free_some_inodes() {
 	 version=$(getVersionToPurge "$okVersions") || exit $?
 
 	local dir
-	for dir in /usr/src/linux-headers-${version}/ \
-	 /usr/src/linux-headers-${version}-*/; do
+	for dir in /usr/src/linux-headers-"$version"/ \
+	 /usr/src/linux-headers-"$version"-*/; do
 		note "Removing $dir"
 		[[ $simulate ]] || rm -rf "$dir"
 	done
@@ -655,9 +663,10 @@ purge_manually() {
 	local ReleasesToPurge
 	[[ $(printf %s "$okReleases" | wc -w) == 1 ]] &&
 	 ReleasesToPurge=$okReleases || {
-		local ManualReleases=$(get_manual_releases)
-		local HoldReleases=$(get_hold_releases)
-		local ReleasesToPurge=$(getReleasesToPurge "$(for release in $okReleases
+		local ManualReleases HoldReleases
+		ManualReleases=$(get_manual_releases)
+		HoldReleases=$(get_hold_releases)
+		ReleasesToPurge=$(getReleasesToPurge "$(for release in $okReleases
 		 do
 			mark=
 			printf %s "$HoldReleases" | grep -Fxq -e "$release" &&
@@ -817,7 +826,7 @@ can not decide which kernels to keep."
 		[[ ${HoldReleases+x} ]] || HoldReleases=$(get_hold_releases)
 
 		Items=$(for release in $Releases; do
-			if [[ $release != $current ]]; then
+			if [[ $release != "$current" ]]; then
 				mark=
 				printf %s "$LatestReleases" | grep -Fxq -e "$release" &&
 				 mark='+' || mark='_'
