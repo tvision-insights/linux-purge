@@ -353,7 +353,7 @@ get_info() {
 	printf '\n%s\n' 'Versioned Linux Packages in System:'
 	dpkg-query -W -f'${Package}\n' 'linux-*' \
 	 | grep -E '^linux-.*-[0-9]+\.[0-9]+\.[0-9]+' \
-	 | xargs dpkg --list | grep -v '^un '
+	 | xargs -r dpkg --list | grep -v '^un '
 	echo
 	local meta_kernels
 	meta_kernels=$(get_meta_kernels) || {
@@ -389,7 +389,7 @@ get_info() {
 	local manual_meta
 	manual_meta=$(apt-cache rdepends --installed --important \
 	 --recurse $meta_kernels | grep -v -e '^Reverse Depends:' -e '^ ' \
-	 | sort -u | xargs apt-mark showmanual)
+	 | sort -u | xargs -r apt-mark showmanual)
 	local dependencies=
 	[[ $manual_meta ]] && {
 		printf '%s\n' 'Related Manually Installed Meta Packages:'
@@ -515,10 +515,10 @@ files; answer e.g. n to skip."
 			   regex="-$(literalize "$release")$"
 			if [[ $simulate ]]; then
 				locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
-				 xargs -0 printf "Would remove %s\n"
+				 xargs -0r printf "Would remove %s\n"
 			else
 				locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
-				 xargs -0 $([[ $yes ]] || printf %s '-p') rm -rfv
+				 xargs -0r $([[ $yes ]] || printf %s '-p') rm -rfv
 			fi
 		done
 		[[ $update_grub ]] && $update_grub
