@@ -43,7 +43,7 @@ yes
 			dobreak=
 			[[ $split == false ]] && {
 				# equal sign not used; check, if argument is optional.
-				for j in ${opts[*]}; do 
+				for j in ${opts[*]}; do
 					[[ $i == "$j" ]] && { dobreak=t; break; }
 				done
 			}
