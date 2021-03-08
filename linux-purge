@@ -482,7 +482,7 @@ remove_extra_initrds() (
 clear_boot() {
 	local ReleasesKnownToDpkg ReleasesOnBoot UnknownReleases
 	ReleasesKnownToDpkg=$(dpkg-query -W -f='${Package}\n' |
-	sed -nr 's/linux-image-([0-9]+\..+)/\1/p')
+	sed -nr 's/^linux-image-(unsigned-)?([0-9]+\..+)/\2/p')
 	# Assume filenames at /boot are nice i.e. do not contain newline etc.
 	ReleasesOnBoot=$(ls /boot/vmlinuz-* |
 	 sed -nr -e 's#\.efi\.signed$##' -e 's#/boot/vmlinuz-([0-9]+\..+)#\1#p' |
