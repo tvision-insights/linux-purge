@@ -491,7 +491,12 @@ clear_boot() {
 	 "$ReleasesKnownToDpkg")
 	[[ $UnknownReleases ]] && {
 		[[ $simulate ]] && note 'Assume updatedb has been run.' \
-		 || { note 'Updating database for locate.'; updatedb; }
+		 || {
+			 [[ $yes ]] || {
+				printf 'Update database to find latest files by locate? [Y/n] :'
+				read -r && [[ ${REPLY,,} =~ ^(y|$) ]]
+			} && { note 'Updating database.'; updatedb; }
+		 }
 		[[ $yes ]] \
 		&& note "About to remove kernel related files unknown to \
 package management system under certain system directories." \
