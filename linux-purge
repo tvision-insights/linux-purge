@@ -490,20 +490,29 @@ clear_boot() {
 	UnknownReleases=$(get_set_complement "$ReleasesOnBoot" \
 	 "$ReleasesKnownToDpkg")
 	[[ $UnknownReleases ]] && {
-		[[ $simulate ]] && note 'Assume updatedb has been run.' \
+		local joined joined2
+		[[ $UnknownReleases != *$'\n'* ]] \
+		&& printf -v joined2 '%s, ' $(eval echo /boot/vmlinuz-$UnknownReleases*) \
+		|| {
+			printf -v joined '%s,' $UnknownReleases
+			printf -v joined2 '%s, ' $(eval echo /boot/vmlinuz-{"${joined%,}"}*)
+		}
+		joined="${joined2%,*}"
+		[[ $joined == *,* ]] && note "Unknown kernels ${joined%,*} \
+and ${joined##*, } found." || note "Unknown kernel ${joined} found."
+		[[ $simulate || $yes ]] && note 'Assume updatedb has been run.' \
 		 || {
-			 [[ $yes ]] || {
-				printf 'Update database to find latest files by locate? [Y/n] :'
-				read -r && [[ ${REPLY,,} =~ ^(y|$) ]]
-			} && { note 'Updating database.'; updatedb; }
+			printf 'Update database to find the latest files by locate? [Y/n] :'
+			read -r && [[ ${REPLY,,} =~ ^(y|$) ]] \
+			&& { note 'Updating database.'; updatedb; }
 		 }
-		[[ $yes ]] \
-		&& note "About to remove kernel related files unknown to \
-package management system under certain system directories." \
-		|| note "Some kernel files are unknown to package management \
-system in /boot and maybe in certain other system directories. You \
-will be prompted to remove the files. Answer y or Y to remove given \
-files; answer e.g. n to skip."
+		[[ $simulate || $yes ]] \
+		&& note "About to remove the kernels and related files unknown \
+to package management system under certain system directories." \
+		|| note "Some kernels and related files are unknown to package \
+management system under certain system directories. You will be \
+prompted to remove the files. Answer y or Y to remove given files; \
+press e.g. mere <return> to skip."
 		local release version minus_flavour lversion regex
 		# restrict removing to these directories:
 		local -r rdirs='^/(boot|lib|usr|var)/'
@@ -523,7 +532,7 @@ files; answer e.g. n to skip."
 				 xargs -0r printf "Would remove %s\n"
 			else
 				locate -be0 --regex -- "$regex" | grep -Ez -- "$rdirs" |
-				 xargs -0r $([[ $yes ]] || printf %s '-p') rm -rfv
+				 xargs -0r $([[ $yes ]] || printf %s '-p') rm -rf
 			fi
 		done
 		[[ $update_grub ]] && $update_grub
