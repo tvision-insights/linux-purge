@@ -148,6 +148,15 @@ debug() {
 	set +x
 }
 
+progress_animation() {
+	while :; do
+		for i in '-' '\' '|' '/'; do
+			printf '%s\r' $i
+			sleep 0.1
+		done
+	done
+}
+
 run_update_grub() {
 	restore_update_grub
 	"$update_grub"
@@ -479,7 +488,7 @@ system and related files and directories:" \
 system. They will be listed below with related files and directories. \
 You will be prompted to remove them. Answer y or Y to remove given \
 files; press e.g. mere <return> to skip."
-		local release version minus_flavour lversion regex arg
+		local release version minus_flavour lversion regex arg pid
 		for release in $UnknownReleases; do
 			version=$(printf %s "$release" | cut -d- -f1,2)
 			minus_flavour=${release:${#version}}
@@ -491,15 +500,25 @@ files; press e.g. mere <return> to skip."
 			  substr($0,RSTART+1)!=r){exit 1}' r=$release &&
 			  regex=".*-$lversion($(literalize "$minus_flavour"))?$" ||
 			   regex=".*-$(literalize "$release")$"
+
+			# Show progress animation, if running in terminal:
+			[ -t 0 ] && { progress_animation & pid=$!
+				trap 'trap - ERR; kill $pid' ERR; } || pid=
+
 			if [[ $simulate ]]; then
 				find /boot/ /lib/ /usr/ /var/ -regextype posix-extended \
 				-regex "$regex" -printf 'Would remove %p\n' 2>/dev/null \
 				|| :
+				[[ $pid ]] && kill $pid
 			else
 				[[ $yes ]] && arg= || arg=I
-				find /boot/ /lib/ /usr/ /var/ -regextype posix-extended \
-				-regex "$regex" -print -exec rm -r${arg} '{}' '+'
+				find /boot/ /lib/ /usr/ /var/ -regextype \
+posix-extended -regex "$regex" -print -exec /bin/sh -euc '
+[ "$1" ] && kill $1 2>/dev/null || :
+i=$2
+shift 2; rm -r$i -- "$@"' find-sh "$pid" "$arg" {} +
 			fi
+			[ -t 0 ] && trap - ERR
 		done
 		(( EUID != 0)) && warn "Would also possibly remove some \
 directories and files that current user does not have reading \
