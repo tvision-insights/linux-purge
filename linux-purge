@@ -295,7 +295,7 @@ get_latest_available_releases() {
 
 # Get the list of Linux releases that have a linux image package marked
 # as being manually installed.
-get_manual_releases() {
+get_manual_releases() (
 # apt-mark showmanual | sed -rn 's/linux-(signed-)?image-(unsigned-)?([0-9]+\.[^:]+).*/\3/p'
 # Instead of using apt-mark, use the following script to do the job faster;
 # LP: #1713219
@@ -303,6 +303,7 @@ get_manual_releases() {
 	auto_file='/var/lib/apt/extended_states'
 	eval $(apt-config shell auto_file Dir::State::extended_states/f)
 
+	set -o pipefail
 	dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' \
 	| awk -v file="$auto_file" '
 	/^.i  linux-(signed-)?image-(unsigned-)?[0-9]+\./ {
@@ -315,18 +316,23 @@ get_manual_releases() {
 	END{
 		while ((getline < file)>0) {
 			if ($1=="Package:") {
-				pkg=$2;
+				pkg=$2; c=1
 				if (pkg in img) {
-					do getline < file; while ($1 != "Auto-Installed:")
-					if($2==0) print_release(pkg)
-					delete img[pkg]
+					while ((getline < file) > 0 && $0) {
+						if ($1 == "Auto-Installed:") {
+							if ($2==1) delete img[pkg]
+							else if ($2!=0) exit 5
+							break
+						}
+					}
 				}
 			}
 		}
 		close(file)
+		if (!c) exit 6
 		for (pkg in img) print_release(pkg)
 	}' | linux-version sort | uniq
-}
+)
 
 get_hold_releases() {
 	dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
