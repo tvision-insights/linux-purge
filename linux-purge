@@ -309,7 +309,7 @@ get_manual_releases() {
 		img[$2]=""
 	}
 	function print_release(pkg) {
-		match(pkg, /.*-image-/)
+		match(pkg, /.*-image-(unsigned-)?/)
 		print substr(pkg, RLENGTH+1)
 	}
 	END{
