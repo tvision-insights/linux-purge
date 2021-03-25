@@ -506,9 +506,9 @@ files; press e.g. mere <return> to skip."
 				trap 'trap - ERR; kill $pid' ERR; } || pid=
 
 			if [[ $simulate ]]; then
-				find /boot/ /lib/ /usr/ /var/ -regextype posix-extended \
-				-regex "$regex" -printf 'Would remove %p\n' 2>/dev/null \
-				|| :
+				find /boot/ /lib/ /usr/ /var/ -type d ! \( -readable \
+-executable \) -prune -o -regextype posix-extended -regex "$regex" \
+-printf 'Would remove %p\n'
 				[[ $pid ]] && kill $pid
 			else
 				[[ $yes ]] && arg= || arg=I
@@ -521,8 +521,8 @@ shift 2; rm -r$i -- "$@"' find-sh "$pid" "$arg" {} +
 			[ -t 0 ] && trap - ERR
 		done
 		(( EUID != 0)) && warn "Would also possibly remove some \
-directories and files that current user does not have reading \
-permission to. Hint: Run as superuser to be sure."
+directories and files that current user does not have permissions to. \
+Hint: Run as superuser to be sure."
 		[[ $update_grub ]] && $update_grub
 	}
 	:
