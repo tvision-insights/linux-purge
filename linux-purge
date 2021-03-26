@@ -707,7 +707,6 @@ simulation mode."
 
 run_fix() {
 	[[ $simulate ]] || remove_extra_initrds
-	[[ $clear_boot ]] && clear_boot
 	if [[ $(stat -f --format="%d" /var) -lt 10 ]]; then
 		# /var is about to run out of inodes. dpkg and apt-get
 		# may not be able to operate.
@@ -781,8 +780,6 @@ you may have to reinstall the package by 'apt-get install --reinstall'."
 	# get list of succesfully installed wanted releses
 	Releases=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' |
 	 sed -nr 's/^[ih]i  linux-image-(unsigned-)?([0-9]+\..+)/\2/p' | linux-version sort)
-
-	[[ $clear_boot ]] && clear_boot
 
 	if [[ -z $keep ]]; then
 		[[ $manual ]] && {
@@ -917,6 +914,7 @@ Hint: try running the command with --fix option."
 }
 
 operate() {
+	[[ $clear_boot ]] && clear_boot
 	if [[ $fix ]]; then
 		run_fix
 	else
