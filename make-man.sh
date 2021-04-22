@@ -12,4 +12,4 @@ s/^Copyright.*/&\n.br/ # keep line break after copyright line
 	s#\\/\\fR##g  # remove tags
 	s#([^[:alpha:]-])([[:upper:]]+)#\1\\fI\\,\2\\/\\fR#g  # underline arguments
 	s#--?[[:alpha:]]+#\\fB\\&\\/\\fR#g  # make options bold
-}'  >./debian/linux-purge.8
+}'  >./doc/linux-purge.8

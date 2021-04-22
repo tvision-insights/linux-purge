@@ -18,7 +18,7 @@ chmod +x linux-purge
 mandir=/usr/local/man/man8
 mkdir -p "$mandir"
 cd "$mandir"
-wget -N https://git.launchpad.net/linux-purge/plain/debian/linux-purge.8
+wget -N https://git.launchpad.net/linux-purge/plain/doc/linux-purge.8
 gzip -f linux-purge.8
 mandb -q
 
@@ -31,5 +31,4 @@ dpkg --compare-versions $(dpkg-query -W -f'${Version}\n' bash-completion) ge '1:
 	mkdir -p "$compdir"
 }
 cd "$compdir"
-wget -N https://git.launchpad.net/linux-purge/plain/debian/linux-purge.bash-completion
-mv -f linux-purge.bash-completion linux-purge
+wget -N https://git.launchpad.net/linux-purge/plain/completions/bash/linux-purge
