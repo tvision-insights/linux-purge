@@ -568,10 +568,11 @@ Hint: Run as superuser to be sure."
 # Returns 0 in success, 1 in case of cancel, other value in case of possible
 # error.
 getReleasesToPurge() {
-	eval $(resize)
+	local lines columns
+	read -r lines columns < <(stty size)
 	local -r title='Choose Which Kernels to '${operation^}
-	local -r height=$(($(tput lines)-6))
-	[[ $(tput cols) -lt $width ]] && error "$w_error" 2
+	local -r height=$((lines-6))
+	[[ $columns -lt $width ]] && error "$w_error" 2
 	local -r legend_text="Legend of the content on the right:
 - asterisk (*): removing this will usually remove kernel metapackage
 - plus (+): removing this will usually upgrade kernel metapackage
@@ -605,9 +606,10 @@ $([[ $legend ]] && printf %s "$legend_text")"
 # Returns 0 in success, 1 in case of cancel, other value in case of possible
 # error.
 getVersionToPurge() {
-	eval $(resize)
-	local -r height=$(($(tput lines)-6))
-	[[ $(tput cols) -lt $width ]] && error "$w_error" 2
+	local lines columns
+	read -r lines columns < <(stty size)
+	local -r height=$((lines-6))
+	[[ $columns -lt $width ]] && error "$w_error" 2
 	local -r title='Choose Which Linux Kernel to '${operation^}
 	local -r infotext='The program purges the chosen kernel in
 a special way due to lack of free inodes.'
