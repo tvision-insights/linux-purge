@@ -2,9 +2,8 @@
 #
 #  linux-purge - Linux kernel purging tool for Ubuntu Linux
 #
-#  Notable dependencies: apt, util-linux, whiptail.
-#  Will use dialog, if available, for interactive kernel selection, if
-#  whiptail is not explicitly requested by command line option.
+#  Notable dependencies: apt, util-linux, whiptail|dialog, linux-base,
+#  coreutils, lsb-release.
 #
 #  Editing: Use tabulator width 4 for indentation.
 #
@@ -40,7 +39,6 @@ width=72
 readonly w_error='Terminal screen not wide enough. Minimum is '$width' columns.' \
 h_error='Not enough lines in terminal screen.' \
 lockfile='/var/lib/dpkg/lock' \
-current=$(uname -r) \
 boot=$(stat  --format="%m" /boot) # = mount point under which /boot is found
 readonly cs=';' # column separator used for dialog command. Will be displayed
 # as is with whiptail command. It should not contain space.
@@ -64,6 +62,7 @@ list=
 optimize= # Do not optimize by default
 interface=d
 operation=purge
+no_booted=0
 
 # update-grub control variables
 update_grub_disabled=
@@ -133,7 +132,8 @@ debug() {
 		date
 		printf '## linux-purge version: %s\n' $program_version
 		printf '## options: %s\n' "$params"
-		printf '## OS: '; lsb_release -ds
+		printf '## OS: '; lsb_release -ds \
+		|| echo 'N/A (Hint: Install lsb-release)'
 		printf '## awk executable: '; $path_resolver -e "$(command -v awk)"
 		printf '## awk version:\n'
 		awk -Wversion --version 2>&1
@@ -235,6 +235,9 @@ Options:
 					  run this as regular user. Note that in some cases
 					  simulation is not complete since some actions may
 					  depend on others being done for real beforehand.
+ -t, --no-booted      Does not detect or protect the booted kernel. This
+					  is a dangerous option meant to be used when run
+					  inside a container.
  -v, --version        Print version.
  -y, --yes            Purge without user confirmation.
 
@@ -354,8 +357,11 @@ get_set_complement() {
 }
 
 get_info() {
-	printf 'Operating system: %s\n' "$(lsb_release -ds)"
-	printf 'Booted kernel: %s\n' "$current"
+	printf 'Operating system: '; lsb_release -ds \
+	|| echo 'N/A (Hint: Install lsb-release)'
+	local b; ((no_booted)) && b='N/A' || b=$current
+	printf 'Booted kernel: %s\n' "$b"
+	((no_booted)) ||
 	printf 'Size of the kernel (in /boot): %i MB\n'  "$(get_release_size_boot $current)"
 	printf 'Space used in /boot: %s MB\n' "$(du --summarize \
 	--block-size=MB /boot 2>/dev/null | cut -f1 -dM)"
@@ -580,8 +586,9 @@ getReleasesToPurge() {
 - letter M: the kernel is installed manually
 - number: the size of the kernel within /boot in megabytes
 Hint: Space bar toggles item's selection."
-	local -r infotext="Booted kernel: $current \
-($(get_release_size_boot $current) MB)
+	local b; ((no_booted)) && b='N/A' || b=$current
+	local -r infotext="Booted kernel: $b \
+$(((no_booted)) || printf '(%s MB)' $(get_release_size_boot $current))
 Free space on /boot: $(avail_boot) MB$([[ $boot != '/boot' ]] &&
 	printf ' (mounted at %s)' "$boot")
 $([[ $legend ]] && printf %s "$legend_text")"
@@ -788,13 +795,14 @@ purge_normally() {
 	local Pkgs Releases ReleasesToKeep LatestReleases HoldReleases \
 	ManualReleases release Items ReleasesToPurge KeepRegex version \
 	PkgsToPurge locked version minus_flavour
-	if ! $(dpkg-query -W -f='${Package} ${db:Status-Abbrev}\n' 2>/dev/null \
+	if ! ((no_booted)) && \
+	! $(dpkg-query -W -f='${Package} ${db:Status-Abbrev}\n' 2>/dev/null \
 	 | grep -qE '^linux-image-(unsigned-)?'"$(literalize $current)"\
 ' [ih]i $'); then
 		error "Current kernel release $current is not successfully \
 installed or it is marked for removal according to the package manager. \
-Please install the kernel, or if you can not do so, please run this command \
-with --fix option."
+You can either use --no-booted option or try to install the kernel, \
+or if you can not do so, try to run this command with --fix option."
 	fi
 
 	# Create list of unsuccessfully/partially installed packages.
@@ -964,10 +972,10 @@ operate() {
 env -u GETOPT_COMPATIBLE getopt --test >/dev/null ||
 [[ $? -eq 4 ]] || error '`getopt --test` failed in this environment.' 4
 # This should not happen with util-linux's getopt.
-params=$(env -u GETOPT_COMPATIBLE getopt -o abcd::fhi:k:lmnosrvy -l \
-auto-only,clear-boot,choose,debug::,fix,help,info,interface:,keep:,\
-list,manual,no-legend,optimize,remove,simulate,version,yes --name \
-"[$program_name] ERROR" -- "$@") \
+params=$(env -u GETOPT_COMPATIBLE getopt -o abcd::fhi:k:lmnostrvy -l \
+auto-only,clear-boot,choose,debug::,fix,help,info,no-booted,\
+interface:,keep:,list,manual,no-legend,optimize,remove,simulate,\
+version,yes --name "[$program_name] ERROR" -- "$@") \
 || {
 	err_code=$?
 	case $err_code in
@@ -1033,6 +1041,9 @@ while :; do
 		-s|--simulate)
 			simulate='--simulate'
 			;;
+		-t|--no-booted)
+			no_booted=1
+			;;
 		-v|--version)
 			show_version; exit
 			;;
@@ -1047,6 +1058,8 @@ while :; do
 done
 
 [[ $# -eq 0 ]] || error "No operand allowed. ($1)" 2
+
+((no_booted)) && current='' || current=$(uname -r)
 
 [[ $debug && -z $debug_file ]] \
 && {
@@ -1090,6 +1103,11 @@ error "Must be run as root, if not in simulation mode. Hint:
 	hash dialog 2>/dev/null || {
 		interface=w
 		warn 'Using whiptail, if needed, because dialog is not installed.'
+	}
+}
+[[ $interface = w ]] && {
+	hash whiptail 2>/dev/null || {
+		((fix+choose)) && error 'whiptail is not installed.'
 	}
 }
 
