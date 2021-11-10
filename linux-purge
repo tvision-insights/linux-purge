@@ -134,7 +134,7 @@ debug() {
 		printf '## linux-purge version: %s\n' $program_version
 		printf '## options: %s\n' "$params"
 		printf '## OS: '; lsb_release -ds
-		printf '## awk executable: '; realpath -e "$(command -v awk)"
+		printf '## awk executable: '; $path_resolver -e "$(command -v awk)"
 		printf '## awk version:\n'
 		awk -Wversion --version 2>&1
 		printf '## linux packages:\n'
@@ -418,7 +418,7 @@ get_info() {
 }
 
 run_pager() {
-	local pager; pager=$(realpath -e "$(command -v pager)")
+	local pager; pager=$($path_resolver -e "$(command -v pager)")
 	case ${pager##*/} in
 		less) "$pager" --no-init --quit-on-intr --quit-if-one-screen \
 --chop-long-lines -- "$@" ;;
@@ -1053,6 +1053,10 @@ done
 	debug_file=$(mktemp $TMPDIR/linux-purge.debug_XXX)
 	show_debug_filename=1
 }
+
+[[ $(realpath -e / 2>/dev/null) == / ]] \
+&& path_resolver=realpath \
+|| path_resolver=readlink
 
 [[ $info ]] && {
 	$debug show_info
