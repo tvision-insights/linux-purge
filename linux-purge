@@ -372,10 +372,10 @@ get_info() {
 	df --inodes /usr/src
 
 	printf '\n%s\n' 'Versioned Linux Packages in System:'
-	dpkg-query -W -f'${Package}\n' 'linux-*' \
-	 | grep -E '^linux-.*-[0-9]+\.[0-9]+\.[0-9]+' \
-	 | xargs -r dpkg --list | grep -v '^un '
+	dpkg --list 'linux-*' \
+	| awk 'NR<6 || ($1 !~ "^un" && $2 ~ "-[0-9]+\.[0-9]+\.[0-9]+")'
 	echo
+
 	local meta_kernels
 	meta_kernels=$(get_meta_kernels) || {
 		printf '%s\n' 'WARNING: No meta kernels found.'
